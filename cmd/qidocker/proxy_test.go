@@ -110,3 +110,28 @@ func TestDSMNativeProxySwitches(t *testing.T) {
 		t.Fatal("expected shared endpoint with authentication disabled")
 	}
 }
+
+func TestDSMProtocolOverride(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "proxy.conf")
+	content := "proxy_enabled=yes\nhttp_host=proxy.example\nhttp_port=17896\nauth_enabled=yes\nproxy_user=test\nproxy_pwd=secret\n"
+	if err := os.WriteFile(path, []byte(content), 0600); err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct{ protocol, want string }{
+		{"", "http://proxy.example:17896"},
+		{"http", "http://proxy.example:17896"},
+		{"https", "https://proxy.example:17896"},
+	} {
+		settings, err := resolveProxy(proxySettings{Mode: "dsm", DSMProtocol: tc.protocol}, path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		visible := settings.visible()
+		if visible.HTTP != tc.want || visible.HTTPS != tc.want || visible.DSMProtocol != tc.protocol || settings.Password != "secret" || visible.Password != "" {
+			t.Fatal("protocol override must preserve endpoint and DSM authentication")
+		}
+	}
+	if _, err := resolveProxy(proxySettings{Mode: "dsm", DSMProtocol: "ftp"}, path); err == nil {
+		t.Fatal("unsupported protocol must be rejected")
+	}
+}

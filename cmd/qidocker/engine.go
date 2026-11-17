@@ -269,8 +269,14 @@ func (m *manager) proxyAction(w http.ResponseWriter, r *http.Request, action str
 			http.Error(w, "无效代理配置", 400)
 			return
 		}
-		if settings.Mode == "dsm" || settings.Mode == "direct" {
-			settings = proxySettings{Mode: settings.Mode}
+		if settings.Mode == "dsm" {
+			if !validDSMProtocol(settings.DSMProtocol) {
+				http.Error(w, "无效的 DSM 代理连接协议", 400)
+				return
+			}
+			settings = proxySettings{Mode: "dsm", DSMProtocol: settings.DSMProtocol}
+		} else if settings.Mode == "direct" {
+			settings = proxySettings{Mode: "direct"}
 		} else if _, err := resolveProxy(settings, dsmPaths...); err != nil {
 			http.Error(w, "无效代理配置", 400)
 			return

@@ -3,7 +3,7 @@
     "use strict";
 
     const base = "/webman/3rdparty/QiDocker/";
-    const assetVersion = "0009";
+    const assetVersion = "0010";
     const pages = ["总览", "容器", "注册表", "映像", "网络", "日志", "设置"];
 
     function node(tag, parent, text) {
@@ -298,12 +298,15 @@
                     ["mode","代理模式",proxy.mode || "dsm",[["dsm","跟随 DSM"],["custom","自定义"],["direct","直连"]]]
                 ], renderMode);
                 const modePanel = node("div", body);
-                let readCustom;
+                let readModeFields;
                 function renderMode() {
                     modePanel.replaceChildren();
-                    readCustom = null;
+                    readModeFields = null;
                     switch (readMode().mode) {
                     case "dsm":
+                        readModeFields = fields(modePanel, [
+                            ["dsm_protocol","代理连接协议",proxy.dsm_protocol || "",[["","默认（按 DSM 配置）"],["http","HTTP"],["https","HTTPS"]]]
+                        ]);
                         node("p", modePanel, "代理配置由 DSM 控制面板 → 网络 → 常规统一管理。");
                         if (proxy.mode === "dsm" && !state.proxy_configured) {
                             node("p", modePanel, "QiDocker 尚未读取到 DSM 代理地址。");
@@ -311,7 +314,7 @@
                         break;
                     case "custom": {
                         const saved = proxy.mode === "custom" ? proxy : {};
-                        readCustom = fields(modePanel, [
+                        readModeFields = fields(modePanel, [
                             ["http","HTTP 代理 URL",saved.http], ["https","HTTPS 代理 URL",saved.https],
                             ["username","代理账号",saved.username], ["password","代理密码（留空保留原密码）","","password"],
                             ["no_proxy","不使用代理的地址",saved.no_proxy]
@@ -327,7 +330,7 @@
                 node("p",body,state.proxy_pending ? "代理修改将在没有运行中容器时自动应用。" : "重启引擎可能中断正在运行的容器。");
                 btn(body,"保存",async () => {
                     const settings = readMode();
-                    if (readCustom) Object.assign(settings, readCustom());
+                    if (readModeFields) Object.assign(settings, readModeFields());
                     await api("proxy-save",{},settings);
                     reload();
                 });
@@ -375,7 +378,7 @@
             const config = Ext.apply({
                 title: "QiDocker", width: 1060, height: 570, minWidth: 730, minHeight: 430
             }, args);
-            config.icon = base + "icon_0009_24.png";
+            config.icon = base + "icon_0010_24.png";
             cls.MainWindow.superclass.constructor.call(this, config);
         },
         afterRender: function () {

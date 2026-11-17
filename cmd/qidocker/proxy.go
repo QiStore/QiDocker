@@ -20,12 +20,13 @@ import (
 )
 
 type proxySettings struct {
-	Mode     string `json:"mode"`
-	HTTP     string `json:"http"`
-	HTTPS    string `json:"https"`
-	NoProxy  string `json:"no_proxy"`
-	Username string `json:"username,omitempty"`
-	Password string `json:"password,omitempty"`
+	Mode        string `json:"mode"`
+	DSMProtocol string `json:"dsm_protocol,omitempty"`
+	HTTP        string `json:"http"`
+	HTTPS       string `json:"https"`
+	NoProxy     string `json:"no_proxy"`
+	Username    string `json:"username,omitempty"`
+	Password    string `json:"password,omitempty"`
 }
 
 func privateJSON(path string, value any) error {
@@ -131,14 +132,23 @@ func dsmProxySettings(values map[string]string) proxySettings {
 	return p
 }
 
+func validDSMProtocol(protocol string) bool {
+	return protocol == "" || protocol == "http" || protocol == "https"
+}
+
 func resolveProxy(p proxySettings, dsmPaths ...string) (proxySettings, error) {
 	switch p.Mode {
 	case "dsm":
+		if !validDSMProtocol(p.DSMProtocol) {
+			return p, errors.New("无效的 DSM 代理连接协议")
+		}
+		protocol := p.DSMProtocol
 		values, err := readAssignments(dsmPaths...)
 		if err != nil {
 			return p, err
 		}
 		p = dsmProxySettings(values)
+		p.DSMProtocol = protocol
 	case "custom":
 	case "direct":
 		return proxySettings{Mode: "direct"}, nil
@@ -154,6 +164,9 @@ func resolveProxy(p proxySettings, dsmPaths ...string) (proxySettings, error) {
 			(u.Scheme != "http" && u.Scheme != "https") ||
 			(u.Path != "" && u.Path != "/") || u.RawQuery != "" || u.Fragment != "" {
 			return proxySettings{}, errors.New("代理地址必须为 HTTP 或 HTTPS URL")
+		}
+		if p.Mode == "dsm" && p.DSMProtocol != "" {
+			u.Scheme = p.DSMProtocol
 		}
 		if p.Username != "" {
 			u.User = url.UserPassword(p.Username, p.Password)
