@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"crypto/tls"
+	"crypto/x509"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -14,6 +15,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"time"
 )
 
@@ -180,7 +182,30 @@ type probeResult struct {
 	Detail string `json:"detail"`
 }
 
-func testProxy(ctx context.Context, p proxySettings) []probeResult {
+func proxyErrorDetail(err error) string {
+	var unknown x509.UnknownAuthorityError
+	var invalid x509.CertificateInvalidError
+	var hostname x509.HostnameError
+	var network net.Error
+	switch {
+	case errors.As(err, &unknown):
+		return "证书签发方不受信任"
+	case errors.As(err, &hostname):
+		return "证书域名与连接地址不匹配"
+	case errors.As(err, &invalid):
+		return "证书无效或已过期"
+	case errors.Is(err, syscall.ECONNRESET):
+		return "连接被重置（TCP RST）"
+	case errors.Is(err, io.EOF), errors.Is(err, io.ErrUnexpectedEOF):
+		return "对端关闭连接"
+	case errors.As(err, &network) && network.Timeout():
+		return "连接超时"
+	default:
+		return "连接失败"
+	}
+}
+
+func testProxy(ctx context.Context, p proxySettings, caPath string) []probeResult {
 	var result []probeResult
 	add := func(name string, ok bool, detail string) {
 		result = append(result, probeResult{name, ok, detail})
@@ -197,6 +222,17 @@ func testProxy(ctx context.Context, p proxySettings) []probeResult {
 	dialer := net.Dialer{Timeout: 5 * time.Second}
 	transport := &http.Transport{DialContext: dialer.DialContext, TLSHandshakeTimeout: 7 * time.Second}
 	defer transport.CloseIdleConnections()
+	if pem, err := os.ReadFile(caPath); err == nil {
+		roots, err := x509.SystemCertPool()
+		if err != nil || !roots.AppendCertsFromPEM(pem) {
+			add("CA 证书", false, "无法加载受信任的 CA 证书")
+			return result
+		}
+		transport.TLSClientConfig = &tls.Config{RootCAs: roots}
+	} else if !errors.Is(err, os.ErrNotExist) {
+		add("CA 证书", false, "无法读取 CA 证书文件")
+		return result
+	}
 	if address != "" {
 		_, err := net.DefaultResolver.LookupHost(ctx, proxy.Hostname())
 		add("代理 DNS", err == nil, "代理主机解析")
@@ -208,10 +244,25 @@ func testProxy(ctx context.Context, p proxySettings) []probeResult {
 				port = "80"
 			}
 		}
-		conn, err := dialer.DialContext(ctx, "tcp", net.JoinHostPort(proxy.Hostname(), port))
-		add("代理 TCP", err == nil, "代理端口连接")
-		if conn != nil {
+		endpoint := net.JoinHostPort(proxy.Hostname(), port)
+		conn, err := dialer.DialContext(ctx, "tcp", endpoint)
+		if err != nil {
+			add("代理 TCP", false, proxyErrorDetail(err))
+			return result
+		}
+		conn.Close()
+		add("代理 TCP", true, "代理端口连接")
+		if proxy.Scheme == "https" {
+			probeCtx, cancel := context.WithTimeout(ctx, 7*time.Second)
+			tlsDialer := tls.Dialer{NetDialer: &dialer, Config: transport.TLSClientConfig}
+			conn, err := tlsDialer.DialContext(probeCtx, "tcp", endpoint)
+			cancel()
+			if err != nil {
+				add("代理 TLS", false, proxyErrorDetail(err))
+				return result
+			}
 			conn.Close()
+			add("代理 TLS", true, "代理证书和 TLS 握手通过")
 		}
 		transport.Proxy = http.ProxyURL(proxy)
 		transport.OnProxyConnectResponse = func(_ context.Context, _ *url.URL, _ *http.Request, res *http.Response) error {
@@ -234,7 +285,7 @@ func testProxy(ctx context.Context, p proxySettings) []probeResult {
 		req, _ := http.NewRequestWithContext(ctx, "GET", check.endpoint, nil)
 		res, err := client.Do(req)
 		if err != nil {
-			add(check.name, false, "连接或 TLS 握手失败")
+			add(check.name, false, proxyErrorDetail(err))
 			continue
 		}
 		_, _ = io.Copy(io.Discard, io.LimitReader(res.Body, 1<<20))

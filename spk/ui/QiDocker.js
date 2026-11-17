@@ -3,7 +3,7 @@
     "use strict";
 
     const base = "/webman/3rdparty/QiDocker/";
-    const assetVersion = "0008";
+    const assetVersion = "0009";
     const pages = ["总览", "容器", "注册表", "映像", "网络", "日志", "设置"];
 
     function node(tag, parent, text) {
@@ -331,15 +331,18 @@
                     await api("proxy-save",{},settings);
                     reload();
                 });
+                let testResults;
                 btn(body,"测试已保存设置",async () => {
+                    testResults.replaceChildren();
                     const rows = await api("proxy-test",{},{});
-                    table(body,["检查项","结果","详情"],rows.map(item => [[item.name,item.ok ? "通过" : "失败",item.detail]]));
+                    table(testResults,["检查项","结果","详情"],rows.map(item => [[item.name,item.ok ? "通过" : "失败",item.detail]]));
                 });
                 btn(body,"立即重启并应用",async () => {
                     if (window.confirm("重启 Docker Engine 可能中断正在运行的容器。确定重启？")) {
                         await api("proxy-apply",{},{}); error("已请求重启");
                     }
                 });
+                testResults = node("div", body);
             }
             const handlers = [
                 () => refresh(overview), containers, registries, images, networks,
@@ -372,7 +375,7 @@
             const config = Ext.apply({
                 title: "QiDocker", width: 1060, height: 570, minWidth: 730, minHeight: 430
             }, args);
-            config.icon = base + "icon_0008_24.png";
+            config.icon = base + "icon_0009_24.png";
             cls.MainWindow.superclass.constructor.call(this, config);
         },
         afterRender: function () {
