@@ -3,7 +3,7 @@
     "use strict";
 
     const base = "/webman/3rdparty/QiDocker/";
-    const assetVersion = "0004";
+    const assetVersion = "0005";
     const pages = ["总览", "容器", "注册表", "映像", "网络", "日志", "设置"];
 
     function node(tag, parent, text) {
@@ -337,9 +337,11 @@
     cls.MainWindow = Ext.extend(SYNO.SDS.AppWindow, {
         constructor: function (args) {
             this.appInstance = args.appInstance;
-            cls.MainWindow.superclass.constructor.call(this, Ext.apply({
+            const config = Ext.apply({
                 title: "QiDocker", width: 1060, height: 570, minWidth: 730, minHeight: 430
-            }, args));
+            }, args);
+            config.icon = base + "icon_0005_24.png";
+            cls.MainWindow.superclass.constructor.call(this, config);
         },
         afterRender: function () {
             cls.MainWindow.superclass.afterRender.apply(this, arguments);
