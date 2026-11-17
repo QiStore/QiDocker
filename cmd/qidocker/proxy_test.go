@@ -135,3 +135,31 @@ func TestDSMProtocolOverride(t *testing.T) {
 		t.Fatal("unsupported protocol must be rejected")
 	}
 }
+
+func TestDSMEndpointOverride(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "proxy.conf")
+	content := "proxy_enabled=yes\nhttp_host=proxy.example\nhttp_port=17895\nauth_enabled=yes\nproxy_user=test\nproxy_pwd=secret\n"
+	if err := os.WriteFile(path, []byte(content), 0600); err != nil {
+		t.Fatal(err)
+	}
+	p := proxySettings{Mode: "dsm", DSMProtocol: "http", DSMEndpoint: "https://tls.example:17896"}
+	settings, err := resolveProxy(p, path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if settings.HTTP != "https://test:secret@tls.example:17896" || settings.HTTPS != settings.HTTP || settings.visible().HTTPS != p.DSMEndpoint {
+		t.Fatal("the HTTPS endpoint must inherit DSM credentials and override the protocol")
+	}
+	if err := os.WriteFile(path, []byte(strings.Replace(content, "proxy_enabled=yes", "proxy_enabled=no", 1)), 0600); err != nil {
+		t.Fatal(err)
+	}
+	settings, err = resolveProxy(p, path)
+	if err != nil || settings.HTTP != "" || settings.HTTPS != "" {
+		t.Fatal("the override must respect disabled DSM proxy")
+	}
+	for _, endpoint := range []string{"http://tls.example", "https://user:pass@tls.example", "https://tls.example?x=y"} {
+		if validDSMEndpoint(endpoint) {
+			t.Fatal("invalid override accepted")
+		}
+	}
+}

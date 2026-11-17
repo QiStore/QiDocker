@@ -22,6 +22,7 @@ import (
 type proxySettings struct {
 	Mode        string `json:"mode"`
 	DSMProtocol string `json:"dsm_protocol,omitempty"`
+	DSMEndpoint string `json:"dsm_endpoint,omitempty"`
 	HTTP        string `json:"http"`
 	HTTPS       string `json:"https"`
 	NoProxy     string `json:"no_proxy"`
@@ -136,19 +137,45 @@ func validDSMProtocol(protocol string) bool {
 	return protocol == "" || protocol == "http" || protocol == "https"
 }
 
+func validDSMEndpoint(endpoint string) bool {
+	if endpoint == "" {
+		return true
+	}
+	u, err := url.Parse(endpoint)
+	return err == nil && u.Scheme == "https" && u.Hostname() != "" && u.User == nil &&
+		u.Opaque == "" && (u.Path == "" || u.Path == "/") && !u.ForceQuery &&
+		u.RawQuery == "" && u.Fragment == "" && !strings.Contains(endpoint, "#")
+}
+
 func resolveProxy(p proxySettings, dsmPaths ...string) (proxySettings, error) {
 	switch p.Mode {
 	case "dsm":
 		if !validDSMProtocol(p.DSMProtocol) {
 			return p, errors.New("无效的 DSM 代理连接协议")
 		}
-		protocol := p.DSMProtocol
+		protocol, endpoint := p.DSMProtocol, strings.TrimSpace(p.DSMEndpoint)
+		if !validDSMEndpoint(endpoint) {
+			return p, errors.New("QiDocker 专用入口必须是无账号密码的 HTTPS 代理 URL")
+		}
 		values, err := readAssignments(dsmPaths...)
 		if err != nil {
 			return p, err
 		}
 		p = dsmProxySettings(values)
-		p.DSMProtocol = protocol
+		p.DSMProtocol, p.DSMEndpoint = protocol, endpoint
+		if endpoint != "" && (p.HTTP != "" || p.HTTPS != "") {
+			if p.Username == "" {
+				original := p.HTTPS
+				if original == "" {
+					original = p.HTTP
+				}
+				if u, err := url.Parse(original); err == nil && u.User != nil {
+					p.Username = u.User.Username()
+					p.Password, _ = u.User.Password()
+				}
+			}
+			p.HTTP, p.HTTPS = endpoint, endpoint
+		}
 	case "custom":
 	case "direct":
 		return proxySettings{Mode: "direct"}, nil
@@ -165,7 +192,7 @@ func resolveProxy(p proxySettings, dsmPaths ...string) (proxySettings, error) {
 			(u.Path != "" && u.Path != "/") || u.RawQuery != "" || u.Fragment != "" {
 			return proxySettings{}, errors.New("代理地址必须为 HTTP 或 HTTPS URL")
 		}
-		if p.Mode == "dsm" && p.DSMProtocol != "" {
+		if p.Mode == "dsm" && p.DSMEndpoint == "" && p.DSMProtocol != "" {
 			u.Scheme = p.DSMProtocol
 		}
 		if p.Username != "" {
