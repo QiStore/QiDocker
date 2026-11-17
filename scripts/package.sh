@@ -2,10 +2,10 @@
 set -euo pipefail
 repo=$(cd "$(dirname "$0")/.." && pwd)
 engine=$(realpath "${1:-$repo/dist/engine}")
-version=${2:-0.1.0-0002}
+version=${2:-0.1.0-0003}
 [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+-[0-9]+$ ]]
 arch=$(go env GOARCH)
-case "$arch" in amd64) platform=x86_64; machine='Advanced Micro Devices X86-64';; arm64) platform=armv8; machine='AArch64';; *) exit 1;; esac
+case "$arch" in amd64) platform=x86_64; dsm_arch='bromolow x86_64'; machine='Advanced Micro Devices X86-64';; arm64) platform=armv8; dsm_arch=armv8; machine='AArch64';; *) exit 1;; esac
 work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
 package="$work/payload"
@@ -48,21 +48,31 @@ chmod 0755 "$package/bin/qidocker-cli"
 for name in "$repo"/spk/scripts/*; do install -m 0755 "$name" "$outer/scripts/"; done
 cp -r "$repo"/spk/{conf,WIZARD_UIFILES} "$outer/"
 python3 "$repo/scripts/icons.py" "$outer" "$package/ui"
-tar -C "$package" --owner=0 --group=0 -czf "$outer/package.tgz" .
+tar --format=ustar --owner=0 --group=0 -C "$package" -c bin ui licenses UPSTREAM.sources |
+    xz -T2 -3 > "$outer/package.tgz"
 cat > "$outer/INFO" <<INFO
 package="QiDocker"
 displayname="QiDocker"
 version="$version"
-arch="$platform"
-firmware="6.2-24922"
-os_max_ver="6.2.4-25599"
+arch="$dsm_arch"
+os_min_ver="6.2-24922"
+os_max_ver="6.2-25599"
 description="QiStore Docker Engine development package for DSM 6.2"
 maintainer="QiStore"
 maintainer_url="https://github.com/QiStore"
 dsmuidir="ui"
 dsmappname="SYNO.SDS.QiDocker.Instance"
+thirdparty="yes"
+install_type="volume"
 startable="yes"
+ctl_stop="yes"
+ctl_uninstall="yes"
+extractsize="$(du -sk "$package" | cut -f1)"
 checksum="$(md5sum "$outer/package.tgz" | cut -d ' ' -f1)"
 INFO
-(cd "$outer" && tar --owner=0 --group=0 -cf "$repo/dist/QiDocker-$version-dsm62-$platform.spk" ./*)
+spk="$repo/dist/QiDocker-$version-dsm62-$platform.spk"
+# DSM expects INFO at the archive root, without a leading "./".
+tar --format=ustar --owner=0 --group=0 -C "$outer" -cf "$spk" \
+    INFO package.tgz scripts conf WIZARD_UIFILES PACKAGE_ICON.PNG PACKAGE_ICON_256.PNG
+tar -xOf "$spk" INFO | cmp "$outer/INFO" -
 (cd "$repo/dist" && sha256sum "QiDocker-$version-dsm62-$platform.spk" > "QiDocker-$version-dsm62-$platform.spk.sha256")

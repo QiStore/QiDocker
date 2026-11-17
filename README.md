@@ -6,7 +6,7 @@ QiStore 为 Synology DSM 开发的独立 Docker Engine 套件。在 DSM 主菜�
 
 ## 从源码构建
 
-在 Linux x86_64 构建环境安装 Go 1.24.13、GCC、Git、make、pkg-config、libseccomp 开发文件、Python 3、GNU tar 和 binutils，然后运行：
+在 Linux x86_64 构建环境安装 Go 1.24.13、GCC、Git、make、pkg-config、libseccomp 开发文件、Python 3、GNU tar、xz 和 binutils，然后运行：
 
 ```sh
 ./scripts/build-engine.sh
@@ -14,7 +14,7 @@ QiStore 为 Synology DSM 开发的独立 Docker Engine 套件。在 DSM 主菜�
 (cd dist && sha256sum -c ./*.sha256)
 ```
 
-构建脚本核对各上游发行标签的 commit。二进制和上游许可随 SPK 打包。测试和构建日志位于 [GitHub Actions](https://github.com/QiStore/QiDocker/actions)。通过 DSM 验收后，推送对应的版本标签（例如 `v0.1.0-0002`），工作流会重新构建、运行 Linux 验收并发布通过校验的 SPK 与日志。
+构建脚本核对各上游发行标签的 commit。二进制和上游许可随 SPK 打包。测试和构建日志位于 [GitHub Actions](https://github.com/QiStore/QiDocker/actions)。通过 DSM 验收后，推送对应的版本标签（例如 `v0.1.0-0003`），工作流会重新构建、运行 Linux 验收并发布通过校验的 SPK 与日志。
 
 ## 安装、运行和卸载
 

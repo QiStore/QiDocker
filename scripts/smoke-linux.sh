@@ -26,7 +26,7 @@ cleanup() {
 trap cleanup EXIT
 mkdir "$work/spk" "$work/target"
 tar -xf "$spk" -C "$work/spk"
-tar -xzf "$work/spk/package.tgz" -C "$work/target"
+tar -xf "$work/spk/package.tgz" -C "$work/target"
 bin="$work/target/bin"
 export DOCKER_HOST="unix://$work/state/run/docker.sock"
 export DOCKER_CONFIG="$work/docker-config"
