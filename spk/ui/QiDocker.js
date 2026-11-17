@@ -3,6 +3,7 @@
     "use strict";
 
     const base = "/webman/3rdparty/QiDocker/";
+    const assetVersion = "0004";
     const pages = ["总览", "容器", "注册表", "映像", "网络", "日志", "设置"];
 
     function node(tag, parent, text) {
@@ -337,22 +338,43 @@
         constructor: function (args) {
             this.appInstance = args.appInstance;
             cls.MainWindow.superclass.constructor.call(this, Ext.apply({
-                title: "QiDocker", width: 1060, height: 570, minWidth: 730, minHeight: 430, layout: "fit",
-                html: '<div class="qd-desktop"></div>'
+                title: "QiDocker", width: 1060, height: 570, minWidth: 730, minHeight: 430
             }, args));
-            this.on("afterrender", function () {
-                const link = document.querySelector('link[data-qidocker]');
-                if (!link) {
-                    const css = node("link",document.head);
-                    css.rel = "stylesheet";
-                    css.href = base + "style.css";
-                    css.dataset.qidocker = "1";
-                }
-                this.disposeQiDocker = tab(this.body.dom.querySelector(".qd-desktop"));
-            }, this);
-            this.on("beforedestroy", function () {
-                if (this.disposeQiDocker) this.disposeQiDocker();
-            }, this);
+        },
+        afterRender: function () {
+            cls.MainWindow.superclass.afterRender.apply(this, arguments);
+            this.mountQiDocker();
+        },
+        onOpen: function () {
+            const result = cls.MainWindow.superclass.onOpen.apply(this, arguments);
+            this.mountQiDocker();
+            return result;
+        },
+        mountQiDocker: function () {
+            const body = this.body && this.body.dom;
+            if (!body || (this.qiDockerRoot && body.contains(this.qiDockerRoot))) return;
+            if (this.disposeQiDocker) this.disposeQiDocker();
+            const root = node("div", body);
+            root.className = "qd-desktop";
+            this.qiDockerRoot = root;
+            if (!document.querySelector('link[data-qidocker="' + assetVersion + '"]')) {
+                const css = node("link", document.head);
+                css.rel = "stylesheet";
+                css.href = base + "style.css?v=" + assetVersion;
+                css.setAttribute("data-qidocker", assetVersion);
+            }
+            try {
+                this.disposeQiDocker = tab(root);
+            } catch (issue) {
+                root.innerHTML = "";
+                node("p", root, "QiDocker 界面加载失败。请关闭后重开窗口。");
+                node("pre", root, issue.message);
+            }
+        },
+        onDestroy: function () {
+            if (this.disposeQiDocker) this.disposeQiDocker();
+            this.disposeQiDocker = null;
+            cls.MainWindow.superclass.onDestroy.apply(this, arguments);
         },
         onClose: function () {
             if (!cls.MainWindow.superclass.onClose.apply(this, arguments)) return false;
