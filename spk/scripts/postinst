@@ -1,0 +1,5 @@
+#!/bin/sh
+set -eu
+. "$(dirname "$0")/common"
+mkdir -p "$QID_STATE"
+chmod 0700 "$QID_STATE"

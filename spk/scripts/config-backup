@@ -1,0 +1,39 @@
+#!/bin/sh
+set -eu
+. "$(dirname "$0")/common"
+[ "$(id -u)" = 0 ] || exit 1
+[ "$#" = 2 ] || exit 2
+action=$1
+directory=$2
+case "$directory" in /*) ;; *) exit 2;; esac
+case "$action" in
+    backup)
+        mkdir -m 0700 "$directory"
+        for name in proxy.json registries.json; do
+            if [ -f "$QID_STATE/$name" ]; then
+                install -m 0600 "$QID_STATE/$name" "$directory/$name"
+            fi
+        done
+        ;;
+    restore)
+        [ -d "$directory" ] && [ ! -L "$directory" ] && [ -d "$QID_STATE" ] || exit 1
+        for name in proxy.json registries.json; do
+            source="$directory/$name"
+            [ ! -L "$source" ] || exit 1
+            if [ -e "$source" ]; then [ -f "$source" ] || exit 1; fi
+        done
+        "$(dirname "$0")/start-stop-status" stop
+        for name in proxy.json registries.json; do
+            source="$directory/$name"
+            if [ -f "$source" ]; then
+                temp=$(mktemp "$QID_STATE/.restore.XXXXXX")
+                install -m 0600 "$source" "$temp"
+                mv -f "$temp" "$QID_STATE/$name"
+            else
+                rm -f "$QID_STATE/$name"
+            fi
+        done
+        "$(dirname "$0")/start-stop-status" start
+        ;;
+    *) exit 2 ;;
+esac

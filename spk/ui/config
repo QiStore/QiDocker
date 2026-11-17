@@ -1,0 +1,24 @@
+{
+  ".url": {
+    "SYNO.SDS.QiDocker.Instance": {
+      "type": "app",
+      "title": "QiDocker",
+      "appWindow": "SYNO.SDS.QiDocker.Instance",
+      "allUsers": false,
+      "allowMultiInstance": false,
+      "icon": "icon_{0}.png"
+    }
+  },
+  "SYNO.SDS.QiDocker.Instance": {
+    "type": "app",
+    "title": "QiDocker",
+    "appWindow": "SYNO.SDS.QiDocker.Instance",
+    "allUsers": false,
+    "allowMultiInstance": false,
+    "icon": "icon_48.png"
+  },
+  "QiDocker.js": {
+    "JSfiles": ["QiDocker.js"],
+    "CSSfiles": ["style.css"]
+  }
+}

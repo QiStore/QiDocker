@@ -1,0 +1,11 @@
+#!/bin/sh
+set -eu
+. "$(dirname "$0")/common"
+[ "${SYNOPKG_PKG_STATUS:-}" != UPGRADE ] || exit 0
+case "${qidocker_keep:-all}" in
+    all) ;;
+    data) rm -f "$QID_STATE/proxy.json" "$QID_STATE/registries.json"
+          rm -rf "$QID_STATE/cli" ;;
+    delete) rm -rf "$QID_STATE" ;;
+    *) exit 1 ;;
+esac

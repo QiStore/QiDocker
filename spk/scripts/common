@@ -1,0 +1,17 @@
+#!/bin/sh
+QID_TARGET=${SYNOPKG_PKGDEST:-/var/packages/QiDocker/target}
+QID_VOLUME=${SYNOPKG_PKGDEST_VOL:-}
+if [ -z "$QID_VOLUME" ]; then
+    QID_REAL=$(readlink -f "$QID_TARGET") || exit 1
+    QID_VOLUME=${QID_REAL%%/@appstore/*}
+fi
+case "$QID_VOLUME" in
+    /volume*) QID_NUMBER=${QID_VOLUME#/volume} ;;
+    *) exit 1 ;;
+esac
+case "$QID_NUMBER" in
+    ''|*[!0-9]*) exit 1 ;;
+esac
+QID_STATE="$QID_VOLUME/@QiDocker"
+[ ! -L "$QID_STATE" ] || exit 1
+umask 077

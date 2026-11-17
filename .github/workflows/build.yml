@@ -1,0 +1,56 @@
+name: Build QiDocker
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: DSM 6.2 x86_64 development build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.24.13'
+          cache: false
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential libseccomp-dev pkg-config
+      - name: Validate development sources
+        run: |
+          go test -race ./...
+          go vet ./...
+          node --check spk/ui/QiDocker.js
+          python3 -m json.tool spk/ui/config >/dev/null
+          for script in spk/scripts/*; do sh -n "$script"; done
+      - name: Compile from upstream sources
+        run: |
+          set -o pipefail
+          mkdir -p dist
+          ./scripts/build-engine.sh |& tee dist/build.log
+      - name: Package and checksum SPK
+        run: |
+          ./scripts/package.sh
+          cd dist
+          sha256sum -c ./*.sha256
+      - name: Run hello-world in the disposable GitHub runner VM
+        run: |
+          set -o pipefail
+          sudo ./scripts/smoke-linux.sh dist/*.spk "$PWD/dist/engine-test.log" |& tee dist/smoke-test.log
+      - name: Retain packages and logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: qidocker-dsm62-x86_64-development
+          path: |
+            dist/*.spk
+            dist/*.sha256
+            dist/*.log
+          if-no-files-found: error

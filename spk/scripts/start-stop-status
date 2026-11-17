@@ -1,0 +1,56 @@
+#!/bin/sh
+set -eu
+. "$(dirname "$0")/common"
+PID="$QID_STATE/supervisor.pid"
+supervisor() {
+    [ -f "$PID" ] || return 1
+    read -r current < "$PID" || return 1
+    case "$current" in ''|*[!0-9]*) return 1;; esac
+    [ -r "/proc/$current/cmdline" ] || return 1
+    tr '\000' '\n' < "/proc/$current/cmdline" | awk '
+        NR == 1 && $0 ~ /\/bin\/qidocker$/ { match_name=1 }
+        NR == 2 && $0 == "serve" && match_name { exit 0 }
+        NR == 2 { exit 1 }
+        END { if (NR < 2) exit 1 }
+    '
+}
+case "${1:-}" in
+    start)
+        supervisor && exit 0
+        mkdir -p "$QID_STATE"
+        chmod 0700 "$QID_STATE"
+        rm -f "$PID"
+        nohup "$QID_TARGET/bin/qidocker" serve "$QID_STATE" "$QID_TARGET" </dev/null >>"$QID_STATE/supervisor.log" 2>&1 &
+        echo "$!" > "$PID"
+        count=0
+        while [ "$count" -lt 30 ]; do
+            if [ -S "$QID_STATE/run/docker.sock" ] &&
+                DOCKER_CONFIG="$QID_STATE/cli" "$QID_TARGET/bin/docker" -H "unix://$QID_STATE/run/docker.sock" version --format '{{.Server.Version}}' >/dev/null 2>&1; then
+                exit 0
+            fi
+            supervisor || exit 1
+            count=$((count+1))
+            sleep 1
+        done
+        "$0" stop
+        exit 1
+        ;;
+    stop)
+        if supervisor; then
+            kill -TERM "$current"
+            count=0
+            while supervisor && [ "$count" -lt 42 ]; do
+                count=$((count+1))
+                sleep 1
+            done
+            supervisor && exit 1
+        fi
+        rm -f "$PID"
+        ;;
+    status)
+        supervisor || exit 3
+        [ -S "$QID_STATE/run/docker.sock" ] || exit 1
+        DOCKER_CONFIG="$QID_STATE/cli" "$QID_TARGET/bin/docker" -H "unix://$QID_STATE/run/docker.sock" version --format '{{.Server.Version}}' >/dev/null 2>&1
+        ;;
+    *) exit 1 ;;
+esac
