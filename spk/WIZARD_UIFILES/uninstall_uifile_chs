@@ -1,1 +1,43 @@
-[{"step_title":"QiDocker 数据保留","items":[{"type":"singleselect","desc":"选择卸载后的数据处理方式。","subitems":[{"key":"qidocker_keep","desc":"保留配置、容器和映像","defaultValue":"all","items":[{"value":"all","displayName":"保留配置和数据"},{"value":"data","displayName":"保留容器和映像数据"},{"value":"delete","displayName":"删除全部 QiDocker 数据"}]}]}]}]
+[
+  {
+    "step_title": "QiDocker 数据保留",
+    "items": [
+      {
+        "type": "combobox",
+        "desc": "选择卸载 QiDocker 后要保留的数据。",
+        "subitems": [
+          {
+            "key": "wizard_qidocker_keep",
+            "desc": "保留方式",
+            "defaultValue": "all",
+            "editable": false,
+            "mode": "local",
+            "displayField": "display",
+            "valueField": "value",
+            "store": {
+              "xtype": "arraystore",
+              "fields": [
+                "display",
+                "value"
+              ],
+              "data": [
+                [
+                  "保留配置和数据",
+                  "all"
+                ],
+                [
+                  "只保留容器和映像",
+                  "data"
+                ],
+                [
+                  "删除全部 QiDocker 数据",
+                  "delete"
+                ]
+              ]
+            }
+          }
+        ]
+      }
+    ]
+  }
+]

@@ -327,9 +327,15 @@
 
     Ext.ns("SYNO.SDS.QiDocker");
     const cls = SYNO.SDS.QiDocker;
-    cls.Instance = Ext.extend(SYNO.SDS.AppInstance, {appWindowName: "SYNO.SDS.QiDocker.MainWindow"});
+    cls.Instance = Ext.extend(SYNO.SDS.AppInstance, {
+        appWindowName: "SYNO.SDS.QiDocker.MainWindow",
+        constructor: function () {
+            cls.Instance.superclass.constructor.apply(this, arguments);
+        }
+    });
     cls.MainWindow = Ext.extend(SYNO.SDS.AppWindow, {
         constructor: function (args) {
+            this.appInstance = args.appInstance;
             cls.MainWindow.superclass.constructor.call(this, Ext.apply({
                 title: "QiDocker", width: 1060, height: 570, minWidth: 730, minHeight: 430, layout: "fit",
                 html: '<div class="qd-desktop"></div>'
@@ -347,6 +353,11 @@
             this.on("beforedestroy", function () {
                 if (this.disposeQiDocker) this.disposeQiDocker();
             }, this);
+        },
+        onClose: function () {
+            if (!cls.MainWindow.superclass.onClose.apply(this, arguments)) return false;
+            this.doClose();
+            return true;
         }
     });
 })();

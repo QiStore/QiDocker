@@ -2,7 +2,7 @@
 set -euo pipefail
 repo=$(cd "$(dirname "$0")/.." && pwd)
 engine=$(realpath "${1:-$repo/dist/engine}")
-version=${2:-0.1.0-0001}
+version=${2:-0.1.0-0002}
 [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+-[0-9]+$ ]]
 arch=$(go env GOARCH)
 case "$arch" in amd64) platform=x86_64; machine='Advanced Micro Devices X86-64';; arm64) platform=armv8; machine='AArch64';; *) exit 1;; esac
