@@ -14,7 +14,7 @@ QiStore 为 Synology DSM 开发的独立 Docker Engine 套件。在 DSM 主菜�
 (cd dist && sha256sum -c ./*.sha256)
 ```
 
-构建脚本核对各上游发行标签的 commit。二进制和上游许可随 SPK 打包。测试和构建日志位于 [GitHub Actions](https://github.com/QiStore/QiDocker/actions)。通过 DSM 验收后，推送对应的版本标签（例如 `v0.1.0-0010`），工作流会重新构建、运行 Linux 验收并发布通过校验的 SPK 与日志。
+构建脚本核对各上游发行标签的 commit。二进制和上游许可随 SPK 打包。测试和构建日志位于 [GitHub Actions](https://github.com/QiStore/QiDocker/actions)。通过 DSM 验收后，推送对应的版本标签（例如 `v0.1.0-0011`），工作流会重新构建、运行 Linux 验收并发布通过校验的 SPK 与日志。
 
 ## 安装、运行和卸载
 
@@ -53,5 +53,7 @@ sudo /var/packages/QiDocker/scripts/config-backup restore /volume1/QiDocker-back
 QiDocker builds an isolated Docker Engine bundle for Synology DSM and registers an application in the DSM desktop. The x86_64 DSM 6.2 package is a development build. See [verification status](docs/verification.md) for tested components and outstanding NAS acceptance criteria.
 
 经典 Docker 鲸鱼图标来自 QiStore 提供的 DSM 图标素材，Docker 标志归 Docker 所有。
+
+套件附带 [Let’s Encrypt 官方 ISRG Root X1](https://letsencrypt.org/certificates/)，作为 DSM 系统证书库的补充。
 
 如果代理使用机构自签 CA，可由管理员将可信的 PEM CA 证书放在套件存储卷的 `@QiDocker/certs/proxy-ca.pem`。连接测试会立即读取，Docker 引擎需重启后才加载。

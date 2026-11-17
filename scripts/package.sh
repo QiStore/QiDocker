@@ -2,7 +2,7 @@
 set -euo pipefail
 repo=$(cd "$(dirname "$0")/.." && pwd)
 engine=$(realpath "${1:-$repo/dist/engine}")
-version=${2:-0.1.0-0010}
+version=${2:-0.1.0-0011}
 [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+-[0-9]+$ ]]
 arch=$(go env GOARCH)
 case "$arch" in amd64) platform=x86_64; dsm_arch='bromolow x86_64'; machine='Advanced Micro Devices X86-64';; arm64) platform=armv8; dsm_arch=armv8; machine='AArch64';; *) exit 1;; esac
@@ -24,7 +24,7 @@ done
 cp "$engine/UPSTREAM.sources" "$package/"
 cp -r "$engine/licenses" "$package/"
 cp "$repo"/spk/ui/{config,style.css} "$package/ui/"
-install -m 0644 "$repo/spk/ui/QiDocker.js" "$package/ui/QiDocker-0010.js"
+install -m 0644 "$repo/spk/ui/QiDocker.js" "$package/ui/QiDocker-0011.js"
 ln -s ../docker-compose "$package/bin/cli-plugins/docker-compose"
 (cd "$repo" && CGO_ENABLED=0 go build -trimpath -ldflags='-s -w' -o "$package/bin/qidocker" ./cmd/qidocker)
 ln -s ../bin/qidocker "$package/ui/control.cgi"
@@ -49,7 +49,9 @@ chmod 0755 "$package/bin/qidocker-cli"
 for name in "$repo"/spk/scripts/*; do install -m 0755 "$name" "$outer/scripts/"; done
 cp -r "$repo"/spk/{conf,WIZARD_UIFILES} "$outer/"
 python3 "$repo/scripts/icons.py" "$outer" "$package/ui"
-tar --format=ustar --owner=0 --group=0 -C "$package" -c bin ui licenses UPSTREAM.sources |
+mkdir -p "$package/certs"
+install -m 0644 "$repo/spk/certs/isrg-root-x1.pem" "$package/certs/isrg-root-x1.pem"
+tar --format=ustar --owner=0 --group=0 -C "$package" -c bin ui certs licenses UPSTREAM.sources |
     xz -T2 -3 > "$outer/package.tgz"
 cat > "$outer/INFO" <<INFO
 package="QiDocker"

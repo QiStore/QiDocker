@@ -218,7 +218,7 @@ func proxyErrorDetail(err error) string {
 	}
 }
 
-func testProxy(ctx context.Context, p proxySettings, caPath string) []probeResult {
+func testProxy(ctx context.Context, p proxySettings, caPaths ...string) []probeResult {
 	var result []probeResult
 	add := func(name string, ok bool, detail string) {
 		result = append(result, probeResult{name, ok, detail})
@@ -235,17 +235,21 @@ func testProxy(ctx context.Context, p proxySettings, caPath string) []probeResul
 	dialer := net.Dialer{Timeout: 5 * time.Second}
 	transport := &http.Transport{DialContext: dialer.DialContext, TLSHandshakeTimeout: 7 * time.Second}
 	defer transport.CloseIdleConnections()
-	if pem, err := os.ReadFile(caPath); err == nil {
-		roots, err := x509.SystemCertPool()
+	roots, err := x509.SystemCertPool()
+	if err != nil {
+		roots = x509.NewCertPool()
+	}
+	for _, caPath := range caPaths {
+		pem, err := os.ReadFile(caPath)
+		if errors.Is(err, os.ErrNotExist) {
+			continue
+		}
 		if err != nil || !roots.AppendCertsFromPEM(pem) {
 			add("CA 证书", false, "无法加载受信任的 CA 证书")
 			return result
 		}
-		transport.TLSClientConfig = &tls.Config{RootCAs: roots}
-	} else if !errors.Is(err, os.ErrNotExist) {
-		add("CA 证书", false, "无法读取 CA 证书文件")
-		return result
 	}
+	transport.TLSClientConfig = &tls.Config{RootCAs: roots}
 	if address != "" {
 		_, err := net.DefaultResolver.LookupHost(ctx, proxy.Hostname())
 		add("代理 DNS", err == nil, "代理主机解析")

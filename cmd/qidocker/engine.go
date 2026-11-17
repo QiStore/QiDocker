@@ -58,9 +58,7 @@ func (m *manager) start(proxies proxySettings) (*exec.Cmd, error) {
 		"PATH=" + filepath.Join(m.target, "bin") + ":/usr/syno/sbin:/usr/syno/bin:/usr/sbin:/usr/bin:/sbin:/bin",
 		"HOME=" + m.state, "HTTP_PROXY=" + proxies.HTTP, "HTTPS_PROXY=" + proxies.HTTPS, "NO_PROXY=" + proxies.NoProxy,
 	}
-	if _, err := os.Stat(filepath.Join(m.state, "certs", "proxy-ca.pem")); err == nil {
-		cmd.Env = append(cmd.Env, "SSL_CERT_DIR=/etc/ssl/certs:/etc/pki/tls/certs:"+filepath.Join(m.state, "certs"))
-	}
+	cmd.Env = append(cmd.Env, "SSL_CERT_DIR=/etc/ssl/certs:/etc/pki/tls/certs:"+filepath.Join(m.target, "certs")+":"+filepath.Join(m.state, "certs"))
 	reader, writer, err := os.Pipe()
 	if err != nil {
 		log.Close()
@@ -303,7 +301,7 @@ func (m *manager) proxyAction(w http.ResponseWriter, r *http.Request, action str
 		}
 		ctx, cancel := context.WithTimeout(r.Context(), 36*time.Second)
 		defer cancel()
-		writeJSON(w, testProxy(ctx, settings, filepath.Join(m.state, "certs", "proxy-ca.pem")))
+		writeJSON(w, testProxy(ctx, settings, filepath.Join(m.target, "certs", "isrg-root-x1.pem"), filepath.Join(m.state, "certs", "proxy-ca.pem")))
 	case "proxy-apply":
 		if _, err := m.desired(); err != nil {
 			http.Error(w, "代理配置无法读取", 422)
