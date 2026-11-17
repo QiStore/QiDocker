@@ -1,0 +1,4 @@
+#!/bin/sh
+set -eu
+# Reuse the data directory on the current volume. DSM handles service startup.
+exec "$(dirname "$0")/postinst"

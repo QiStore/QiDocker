@@ -1,0 +1,4 @@
+#!/bin/sh
+set -eu
+# Stop the old supervisor before DSM replaces package files.
+exec "$(dirname "$0")/start-stop-status" stop

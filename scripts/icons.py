@@ -6,7 +6,7 @@ import sys
 source = pathlib.Path(__file__).resolve().parents[1] / "spk/assets/docker-mark.png"
 outer, ui = map(pathlib.Path, sys.argv[1:])
 icons = [(outer, "PACKAGE_ICON.PNG", 72), (outer, "PACKAGE_ICON_256.PNG", 256)]
-icons.extend((ui, f"icon_0007_{size}.png", size) for size in (16, 24, 32, 48, 64, 72, 128, 256))
+icons.extend((ui, f"icon_0008_{size}.png", size) for size in (16, 24, 32, 48, 64, 72, 128, 256))
 
 for directory, name, size in icons:
     content_size = round(size * 0.94)
