@@ -3,7 +3,7 @@
     "use strict";
 
     const base = "/webman/3rdparty/QiDocker/";
-    const assetVersion = "0005";
+    const assetVersion = "0006";
     const pages = ["总览", "容器", "注册表", "映像", "网络", "日志", "设置"];
 
     function node(tag, parent, text) {
@@ -42,7 +42,7 @@
         return element;
     }
 
-    function fields(parent, definition) {
+    function fields(parent, definition, onChange) {
         const form = node("div", parent);
         form.className = "qd-form";
         const inputs = {};
@@ -57,7 +57,9 @@
                 input = node(type === "textarea" ? "textarea" : "input", label);
                 if (type !== "textarea") input.type = type || "text";
             }
+            if (type === "password") input.autocomplete = "new-password";
             input.value = value || "";
+            if (onChange) input.onchange = onChange;
             inputs[key] = input;
         });
         return () => Object.fromEntries(Object.entries(inputs).map(([key, input]) => [key, input.value]));
@@ -292,13 +294,43 @@
             async function settings() {
                 const state = await api("status");
                 const proxy = state.proxy || {};
-                const read = fields(body,[
-                    ["mode","代理模式",proxy.mode,[["dsm","跟随 DSM"],["custom","自定义"],["direct","直连"]]],
-                    ["http","HTTP 代理 URL",proxy.http],["https","HTTPS 代理 URL",proxy.https],
-                    ["username","代理账号",proxy.mode === "custom" ? proxy.username : ""],["password","代理密码（留空保留原密码）","","password"],["no_proxy","不使用代理的地址",proxy.no_proxy]
-                ]);
+                const readMode = fields(body, [
+                    ["mode","代理模式",proxy.mode || "dsm",[["dsm","跟随 DSM"],["custom","自定义"],["direct","直连"]]]
+                ], renderMode);
+                const modePanel = node("div", body);
+                let readCustom;
+                function renderMode() {
+                    modePanel.replaceChildren();
+                    readCustom = null;
+                    switch (readMode().mode) {
+                    case "dsm":
+                        node("p", modePanel, "代理配置由 DSM 控制面板 → 网络 → 常规统一管理。");
+                        if (proxy.mode === "dsm" && !state.proxy_configured) {
+                            node("p", modePanel, "QiDocker 尚未读取到 DSM 代理地址。");
+                        }
+                        break;
+                    case "custom": {
+                        const saved = proxy.mode === "custom" ? proxy : {};
+                        readCustom = fields(modePanel, [
+                            ["http","HTTP 代理 URL",saved.http], ["https","HTTPS 代理 URL",saved.https],
+                            ["username","代理账号",saved.username], ["password","代理密码（留空保留原密码）","","password"],
+                            ["no_proxy","不使用代理的地址",saved.no_proxy]
+                        ]);
+                        break;
+                    }
+                    case "direct":
+                        node("p", modePanel, "直接连接 Docker Hub。");
+                        break;
+                    }
+                }
+                renderMode();
                 node("p",body,state.proxy_pending ? "代理修改将在没有运行中容器时自动应用。" : "重启引擎可能中断正在运行的容器。");
-                btn(body,"保存",async () => { await api("proxy-save",{},read()); reload(); });
+                btn(body,"保存",async () => {
+                    const settings = readMode();
+                    if (readCustom) Object.assign(settings, readCustom());
+                    await api("proxy-save",{},settings);
+                    reload();
+                });
                 btn(body,"测试已保存设置",async () => {
                     const rows = await api("proxy-test",{},{});
                     table(body,["检查项","结果","详情"],rows.map(item => [[item.name,item.ok ? "通过" : "失败",item.detail]]));
@@ -340,7 +372,7 @@
             const config = Ext.apply({
                 title: "QiDocker", width: 1060, height: 570, minWidth: 730, minHeight: 430
             }, args);
-            config.icon = base + "icon_0005_24.png";
+            config.icon = base + "icon_0006_24.png";
             cls.MainWindow.superclass.constructor.call(this, config);
         },
         afterRender: function () {
@@ -379,7 +411,7 @@
             cls.MainWindow.superclass.onDestroy.apply(this, arguments);
         },
         onClose: function () {
-            if (!cls.MainWindow.superclass.onClose.apply(this, arguments)) return false;
+            cls.MainWindow.superclass.onClose.apply(this, arguments);
             this.doClose();
             return true;
         }

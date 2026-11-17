@@ -154,6 +154,10 @@ func testProxy(ctx context.Context, p proxySettings) []probeResult {
 	if address == "" {
 		address = p.HTTP
 	}
+	if p.Mode == "dsm" && address == "" {
+		add("DSM 代理", false, "QiDocker 未读取到 DSM 代理地址，本次未执行连接测试")
+		return result
+	}
 	proxy, _ := url.Parse(address)
 	dialer := net.Dialer{Timeout: 5 * time.Second}
 	transport := &http.Transport{DialContext: dialer.DialContext, TLSHandshakeTimeout: 7 * time.Second}

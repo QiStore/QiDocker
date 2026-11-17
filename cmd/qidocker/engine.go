@@ -253,7 +253,8 @@ func (m *manager) status(w http.ResponseWriter, r *http.Request) {
 		active = res.StatusCode == 200
 		res.Body.Close()
 	}
-	writeJSON(w, map[string]any{"online": active, "proxy": settings.visible(), "proxy_pending": err == nil && settings != m.applied, "proxy_invalid": err != nil})
+	writeJSON(w, map[string]any{"online": active, "proxy": settings.visible(), "proxy_pending": err == nil && settings != m.applied, "proxy_invalid": err != nil,
+		"proxy_configured": err == nil && (settings.HTTP != "" || settings.HTTPS != "")})
 }
 
 func (m *manager) proxyAction(w http.ResponseWriter, r *http.Request, action string) {
@@ -265,7 +266,9 @@ func (m *manager) proxyAction(w http.ResponseWriter, r *http.Request, action str
 			http.Error(w, "无效代理配置", 400)
 			return
 		}
-		if _, err := resolveProxy(settings, dsmPaths...); err != nil {
+		if settings.Mode == "dsm" || settings.Mode == "direct" {
+			settings = proxySettings{Mode: settings.Mode}
+		} else if _, err := resolveProxy(settings, dsmPaths...); err != nil {
 			http.Error(w, "无效代理配置", 400)
 			return
 		}
