@@ -3,9 +3,9 @@
 | 项目 | 状态 |
 | --- | --- |
 | x86_64 Linux 上游源码编译 | dockerd、Docker CLI、Containerd、runc、Compose、tini 已编译 |
-| DSM 6.2 x86_64 SPK | 开发打包目标，DSM 套件中心验收待测 |
-| Linux 隔离引擎启动 | 当前执行环境拒绝创建 Unix Socket，启动测试被阻断 |
-| 真实 hello-world | 待在具备容器运行权限的 VM 执行 |
+| DSM 6.2 x86_64 SPK | 已生成开发包并验证 SHA-256、内层归档 MD5、架构和可执行文件。DSM 套件中心验收待测 |
+| Linux 隔离引擎启动 | GitHub Actions 独立 Linux 虚拟机已通过引擎启动和重启 |
+| 真实 hello-world | GitHub Actions 已从 Docker Hub 拉取并运行，且通过导入导出和重启后再次运行 |
 | DSM 主菜单、管理员会话及 CGI | 已实现，DSM 实机验证待测 |
 | DSM 系统代理 | 配置解析、凭据编码和变更检测可本地测试。控制面板实际配置路径和格式待核对 |
 | 自定义代理、注册表、导入导出 | 已接入 Engine API，端到端待测 |
@@ -21,3 +21,5 @@
 DSM 验收顺序为安装、引擎启动、桌面窗口打开、容器生命周期、镜像操作、私有注册表认证、DSM 代理同步、自定义代理及认证、代理修改和重启持久化、升级、卸载后重装和恢复数据。操作需在独立 DSM 实例上完成。
 
 [Synology DSM Package Developer Guide](https://help.synology.com/developer-guide/getting_started/system_requirement.html)
+
+[Linux 虚拟机验收运行](https://github.com/QiStore/QiDocker/actions/runs/44127811305)

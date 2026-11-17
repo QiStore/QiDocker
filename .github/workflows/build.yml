@@ -2,6 +2,7 @@ name: Build QiDocker
 on:
   push:
     branches: [main]
+    tags: ['v*']
   pull_request:
   workflow_dispatch:
 
@@ -37,7 +38,9 @@ jobs:
           ./scripts/build-engine.sh |& tee dist/build.log
       - name: Package and checksum SPK
         run: |
-          ./scripts/package.sh
+          version=0.1.0-0002
+          if [[ "$GITHUB_REF_TYPE" == tag ]]; then version=${GITHUB_REF_NAME#v}; fi
+          ./scripts/package.sh dist/engine "$version"
           cd dist
           sha256sum -c ./*.sha256
       - name: Run hello-world in the disposable GitHub runner VM
@@ -54,3 +57,23 @@ jobs:
             dist/*.sha256
             dist/*.log
           if-no-files-found: error
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: qidocker-dsm62-x86_64-development
+          path: dist
+      - name: Verify and publish the tagged build
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          cd dist
+          sha256sum -c ./*.sha256
+          gh release create "$GITHUB_REF_NAME" --verify-tag --generate-notes --title "QiDocker ${GITHUB_REF_NAME#v}" ./*.spk ./*.sha256 ./*.log
