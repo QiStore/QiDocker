@@ -20,7 +20,7 @@ import (
 const home = "/var/packages/QiDocker"
 const authCGI = "/usr/syno/synoman/webman/modules/authenticate.cgi"
 
-var dsmPaths = []string{"/etc/proxy.conf", "/etc/environment"}
+var dsmPaths = []string{"/etc/environment", "/etc/proxy.conf"}
 
 func main() {
 	if strings.HasSuffix(os.Args[0], ".cgi") {

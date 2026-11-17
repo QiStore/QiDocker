@@ -93,6 +93,42 @@ func readAssignments(paths ...string) (map[string]string, error) {
 	return values, nil
 }
 
+// DSM stores the proxy endpoint and optional credentials as separate keys.
+func dsmProxySettings(values map[string]string) proxySettings {
+	p := proxySettings{Mode: "dsm"}
+	enabled, native := values["proxy_enabled"]
+	if !native {
+		p.HTTP, p.HTTPS, p.NoProxy = values["http_proxy"], values["https_proxy"], values["no_proxy"]
+		p.Username, p.Password = values["proxy_username"], values["proxy_password"]
+		return p
+	}
+	if enabled != "yes" {
+		return p
+	}
+	endpoint := func(host, port string) string {
+		if host == "" {
+			return ""
+		}
+		host = strings.TrimPrefix(strings.TrimSuffix(host, "]"), "[")
+		if port != "" {
+			host = net.JoinHostPort(host, port)
+		} else if strings.Contains(host, ":") {
+			host = "[" + host + "]"
+		}
+		return "http://" + host
+	}
+	p.HTTP = endpoint(values["http_host"], values["http_port"])
+	p.HTTPS = endpoint(values["https_host"], values["https_port"])
+	if p.HTTPS == "" {
+		p.HTTPS = p.HTTP
+	}
+	p.NoProxy = values["no_proxy"]
+	if values["auth_enabled"] == "yes" {
+		p.Username, p.Password = values["proxy_user"], values["proxy_pwd"]
+	}
+	return p
+}
+
 func resolveProxy(p proxySettings, dsmPaths ...string) (proxySettings, error) {
 	switch p.Mode {
 	case "dsm":
@@ -100,8 +136,7 @@ func resolveProxy(p proxySettings, dsmPaths ...string) (proxySettings, error) {
 		if err != nil {
 			return p, err
 		}
-		p = proxySettings{Mode: "dsm", HTTP: values["http_proxy"], HTTPS: values["https_proxy"],
-			NoProxy: values["no_proxy"], Username: values["proxy_username"], Password: values["proxy_password"]}
+		p = dsmProxySettings(values)
 	case "custom":
 	case "direct":
 		return proxySettings{Mode: "direct"}, nil

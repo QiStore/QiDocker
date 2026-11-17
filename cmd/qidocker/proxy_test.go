@@ -74,3 +74,39 @@ func TestDockerLogDemultiplex(t *testing.T) {
 		t.Fatalf("unexpected log %q", decoded.String())
 	}
 }
+
+func TestDSMNativeProxySettings(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "proxy.conf")
+	contents := "proxy_enabled=yes\nhttp_host=proxy.example\nhttp_port=3128\nhttps_host=2001:db8::1\nhttps_port=8080\nauth_enabled=yes\nproxy_user=test\nproxy_pwd=a=p@ss\n"
+	if err := os.WriteFile(path, []byte(contents), 0600); err != nil {
+		t.Fatal(err)
+	}
+	settings, err := resolveProxy(proxySettings{Mode: "dsm"}, path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, address := range []string{settings.HTTP, settings.HTTPS} {
+		u, err := url.Parse(address)
+		if err != nil || u.User == nil || u.User.Username() != "test" {
+			t.Fatal("expected DSM proxy credentials")
+		}
+		if pwd, ok := u.User.Password(); !ok || pwd != "a=p@ss" {
+			t.Fatal("DSM proxy password was not preserved")
+		}
+	}
+	if settings.visible().HTTP != "http://proxy.example:3128" || settings.visible().HTTPS != "http://[2001:db8::1]:8080" {
+		t.Fatal("expected DSM proxy endpoints without credentials")
+	}
+}
+
+func TestDSMNativeProxySwitches(t *testing.T) {
+	values := map[string]string{"proxy_enabled": "no", "http_proxy": "http://fallback:8888", "http_host": "proxy.example", "http_port": "3128", "auth_enabled": "no", "proxy_user": "old", "proxy_pwd": "old"}
+	if got := dsmProxySettings(values); got.HTTP != "" || got.HTTPS != "" {
+		t.Fatal("disabled DSM proxy must override legacy environment values")
+	}
+	values["proxy_enabled"] = "yes"
+	got := dsmProxySettings(values)
+	if got.HTTPS != "http://proxy.example:3128" || got.HTTPS != got.HTTP || got.Username != "" || got.Password != "" {
+		t.Fatal("expected shared endpoint with authentication disabled")
+	}
+}
