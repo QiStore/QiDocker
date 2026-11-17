@@ -163,3 +163,22 @@ func TestDSMEndpointOverride(t *testing.T) {
 		}
 	}
 }
+
+func TestPreferDSMProxyTLS(t *testing.T) {
+	plain := "http://test:secret@proxy.example:17897"
+	probe := func(endpoint string) bool {
+		if endpoint != "proxy.example:17897" {
+			t.Fatal("probe must use the DSM address and port without credentials")
+		}
+		return true
+	}
+	if got := preferDSMProxyTLS(plain, probe); got != "https://test:secret@proxy.example:17897" {
+		t.Fatal("TLS detection must preserve the configured port and authentication")
+	}
+	if got := preferDSMProxyTLS(plain, func(string) bool { return false }); got != plain {
+		t.Fatal("plain DSM configuration must remain usable")
+	}
+	if got := preferDSMProxyTLS("https://proxy.example", func(string) bool { t.Fatal("explicit HTTPS should not be probed"); return false }); got != "https://proxy.example" {
+		t.Fatal("explicit HTTPS address must not change")
+	}
+}

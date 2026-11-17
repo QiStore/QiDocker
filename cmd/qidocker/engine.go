@@ -24,12 +24,13 @@ import (
 )
 
 type manager struct {
-	state, target string
-	client        *http.Client
-	mu            sync.Mutex
-	applied       proxySettings
-	process       *os.Process
-	restart       chan struct{}
+	state, target  string
+	transportCache sync.Map
+	client         *http.Client
+	mu             sync.Mutex
+	applied        proxySettings
+	process        *os.Process
+	restart        chan struct{}
 }
 
 var proxyUserinfo = regexp.MustCompile(`(?i)(https?://)[^/\s"@]+@`)
@@ -99,7 +100,35 @@ func (m *manager) desired() (proxySettings, error) {
 	if err != nil {
 		return settings, err
 	}
-	return resolveProxy(settings, dsmPaths...)
+	resolved, err := resolveProxy(settings, dsmPaths...)
+	if err == nil && settings.Mode == "dsm" && settings.DSMProtocol == "" && settings.DSMEndpoint == "" {
+		resolved.HTTP = preferDSMProxyTLS(resolved.HTTP, m.dsmProxyUsesTLS)
+		resolved.HTTPS = preferDSMProxyTLS(resolved.HTTPS, m.dsmProxyUsesTLS)
+	}
+	return resolved, err
+}
+
+type dsmProxyProbe struct {
+	tls    bool
+	expiry time.Time
+}
+
+func (m *manager) dsmProxyUsesTLS(endpoint string) bool {
+	if cached, ok := m.transportCache.Load(endpoint); ok {
+		probe := cached.(dsmProxyProbe)
+		if probe.tls || time.Now().Before(probe.expiry) {
+			return probe.tls
+		}
+	}
+	roots, err := proxyTrustRoots(filepath.Join(m.target, "certs", "isrg-root-x1.pem"), filepath.Join(m.state, "certs", "proxy-ca.pem"))
+	useTLS := true
+	if err == nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		useTLS = probeDSMProxyTLS(ctx, endpoint, roots)
+		cancel()
+	}
+	m.transportCache.Store(endpoint, dsmProxyProbe{tls: useTLS, expiry: time.Now().Add(time.Minute)})
+	return useTLS
 }
 
 func (m *manager) request(ctx context.Context, method, path string, body io.Reader, headers http.Header) (*http.Response, error) {

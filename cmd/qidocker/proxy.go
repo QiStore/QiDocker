@@ -245,6 +245,57 @@ func proxyErrorDetail(err error) string {
 	}
 }
 
+// Probe the same host and port without proxy authentication. An explicitly
+// configured HTTPS address is never rewritten and credentials are not probed.
+func preferDSMProxyTLS(address string, detect func(string) bool) string {
+	u, err := url.Parse(address)
+	if err != nil || u.Scheme != "http" || u.Hostname() == "" {
+		return address
+	}
+	port := u.Port()
+	if port == "" {
+		port = "80"
+	}
+	if detect(net.JoinHostPort(u.Hostname(), port)) {
+		u.Scheme = "https"
+		// A shared listener keeps its original port, including implicit HTTP 80.
+		u.Host = net.JoinHostPort(u.Hostname(), port)
+		return u.String()
+	}
+	return address
+}
+
+func probeDSMProxyTLS(ctx context.Context, endpoint string, roots *x509.CertPool) bool {
+	dialer := tls.Dialer{Config: &tls.Config{RootCAs: roots}}
+	conn, err := dialer.DialContext(ctx, "tcp", endpoint)
+	if err == nil {
+		conn.Close()
+		return true
+	}
+	// A certificate failure proves TLS is present. Keep TLS and let the
+	// existing diagnostics report why the certificate cannot be verified.
+	var verification *tls.CertificateVerificationError
+	var alert tls.AlertError
+	return errors.As(err, &verification) || errors.As(err, &alert)
+}
+
+func proxyTrustRoots(caPaths ...string) (*x509.CertPool, error) {
+	roots, err := x509.SystemCertPool()
+	if err != nil {
+		roots = x509.NewCertPool()
+	}
+	for _, caPath := range caPaths {
+		pem, err := os.ReadFile(caPath)
+		if errors.Is(err, os.ErrNotExist) {
+			continue
+		}
+		if err != nil || !roots.AppendCertsFromPEM(pem) {
+			return nil, errors.New("无法加载受信任的 CA 证书")
+		}
+	}
+	return roots, nil
+}
+
 func testProxy(ctx context.Context, p proxySettings, caPaths ...string) []probeResult {
 	var result []probeResult
 	add := func(name string, ok bool, detail string) {
@@ -262,19 +313,10 @@ func testProxy(ctx context.Context, p proxySettings, caPaths ...string) []probeR
 	dialer := net.Dialer{Timeout: 5 * time.Second}
 	transport := &http.Transport{DialContext: dialer.DialContext, TLSHandshakeTimeout: 7 * time.Second}
 	defer transport.CloseIdleConnections()
-	roots, err := x509.SystemCertPool()
+	roots, err := proxyTrustRoots(caPaths...)
 	if err != nil {
-		roots = x509.NewCertPool()
-	}
-	for _, caPath := range caPaths {
-		pem, err := os.ReadFile(caPath)
-		if errors.Is(err, os.ErrNotExist) {
-			continue
-		}
-		if err != nil || !roots.AppendCertsFromPEM(pem) {
-			add("CA 证书", false, "无法加载受信任的 CA 证书")
-			return result
-		}
+		add("CA 证书", false, err.Error())
+		return result
 	}
 	transport.TLSClientConfig = &tls.Config{RootCAs: roots}
 	if address != "" {
