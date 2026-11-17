@@ -3,7 +3,7 @@
     "use strict";
 
     const base = "/webman/3rdparty/QiDocker/";
-    const assetVersion = "0013";
+    const assetVersion = "0014";
     const pages = ["总览", "容器", "注册表", "映像", "网络", "日志", "设置"];
 
     function node(tag, parent, text) {
@@ -304,11 +304,7 @@
                     readModeFields = null;
                     switch (readMode().mode) {
                     case "dsm":
-                        readModeFields = fields(modePanel, [
-                            ["dsm_protocol","代理连接协议",proxy.dsm_protocol || "",[["","自动识别（同一地址和端口）"],["http","HTTP"],["https","HTTPS"]]],
-                            ...(proxy.dsm_endpoint ? [["dsm_endpoint","已保存的专用 HTTPS 入口",proxy.dsm_endpoint]] : [])
-                        ]);
-                        node("p", modePanel, "地址、端口和认证由 DSM 管理。自动识别会优先尝试同一入口的 TLS。");
+                        node("p", modePanel, "地址、端口和认证由 DSM 管理，QiDocker 自动识别连接协议。");
                         if (proxy.mode === "dsm" && state.proxy_configured) {
                             const endpoint = proxy.https || proxy.http;
                             if (endpoint) node("p", modePanel, "已保存的 Docker Hub 代理为 " + endpoint);
@@ -383,7 +379,7 @@
             const config = Ext.apply({
                 title: "QiDocker", width: 1060, height: 570, minWidth: 730, minHeight: 430
             }, args);
-            config.icon = base + "icon_0013_24.png";
+            config.icon = base + "icon_0014_24.png";
             cls.MainWindow.superclass.constructor.call(this, config);
         },
         afterRender: function () {

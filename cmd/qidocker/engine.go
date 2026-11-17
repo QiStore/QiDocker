@@ -101,7 +101,7 @@ func (m *manager) desired() (proxySettings, error) {
 		return settings, err
 	}
 	resolved, err := resolveProxy(settings, dsmPaths...)
-	if err == nil && settings.Mode == "dsm" && settings.DSMProtocol == "" && settings.DSMEndpoint == "" {
+	if err == nil && settings.Mode == "dsm" {
 		resolved.HTTP = preferDSMProxyTLS(resolved.HTTP, m.dsmProxyUsesTLS)
 		resolved.HTTPS = preferDSMProxyTLS(resolved.HTTPS, m.dsmProxyUsesTLS)
 	}
@@ -297,16 +297,7 @@ func (m *manager) proxyAction(w http.ResponseWriter, r *http.Request, action str
 			return
 		}
 		if settings.Mode == "dsm" {
-			if !validDSMProtocol(settings.DSMProtocol) {
-				http.Error(w, "无效的 DSM 代理连接协议", 400)
-				return
-			}
-			endpoint := strings.TrimSpace(settings.DSMEndpoint)
-			if !validDSMEndpoint(endpoint) {
-				http.Error(w, "QiDocker 专用入口必须是无账号密码的 HTTPS 代理 URL", 400)
-				return
-			}
-			settings = proxySettings{Mode: "dsm", DSMProtocol: settings.DSMProtocol, DSMEndpoint: endpoint}
+			settings = proxySettings{Mode: "dsm"}
 		} else if settings.Mode == "direct" {
 			settings = proxySettings{Mode: "direct"}
 		} else if _, err := resolveProxy(settings, dsmPaths...); err != nil {
