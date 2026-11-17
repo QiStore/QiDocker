@@ -103,6 +103,8 @@ func (m *manager) desired() (proxySettings, error) {
 	}
 	resolved, err := resolveProxy(settings, dsmPaths...)
 	if err == nil && settings.Mode == "dsm" {
+		resolved.HTTP = applyDSMProxyAlias(resolved.HTTP, dsmTLSAliasSource, dsmTLSAliasDestination)
+		resolved.HTTPS = applyDSMProxyAlias(resolved.HTTPS, dsmTLSAliasSource, dsmTLSAliasDestination)
 		resolved.HTTP = preferDSMProxyTLS(resolved.HTTP, m.dsmProxyUsesTLS)
 		resolved.HTTPS = preferDSMProxyTLS(resolved.HTTPS, m.dsmProxyUsesTLS)
 		if strings.HasPrefix(resolved.HTTP, "http://") || strings.HasPrefix(resolved.HTTPS, "http://") {

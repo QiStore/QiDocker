@@ -175,3 +175,19 @@ func TestPreferNativeTLSProxy(t *testing.T) {
 		t.Fatal("DSM disabled must not use native proxy")
 	}
 }
+
+func TestApplyDSMProxyAlias(t *testing.T) {
+	source, target := "proxy.example:17895", "https://tls.example:17896"
+	input := "http://dsm:secret@proxy.example:17895"
+	if got := applyDSMProxyAlias(input, source, target); got != "https://dsm:secret@tls.example:17896" {
+		t.Fatal("expected site TLS route with DSM credentials")
+	}
+	for _, address := range []string{"", "http://proxy.example:9999", "http://other.example:17895", "https://proxy.example:17895"} {
+		if got := applyDSMProxyAlias(address, source, target); got != address {
+			t.Fatal("only the exact DSM HTTP endpoint can be mapped")
+		}
+	}
+	if got := applyDSMProxyAlias(input, "", ""); got != input {
+		t.Fatal("standard builds must keep generic behavior")
+	}
+}

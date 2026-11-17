@@ -245,6 +245,27 @@ func nativeDockerTLSProxy(ctx context.Context) string {
 	return u.String()
 }
 
+// Optional site route embedded in a deployment-specific SPK. With no route
+// compiled in, standard builds continue to discover the proxy from DSM.
+var dsmTLSAliasSource, dsmTLSAliasDestination string
+
+func applyDSMProxyAlias(address, source, destination string) string {
+	if source == "" || destination == "" {
+		return address
+	}
+	original, err := url.Parse(address)
+	if err != nil || original.Scheme != "http" || !strings.EqualFold(original.Host, source) {
+		return address
+	}
+	target, err := url.Parse(destination)
+	if err != nil || target.Scheme != "https" || target.Hostname() == "" || target.User != nil ||
+		target.Opaque != "" || target.Path != "" || target.ForceQuery || target.RawQuery != "" || target.Fragment != "" {
+		return address
+	}
+	target.User = original.User
+	return target.String()
+}
+
 func preferNativeTLSProxy(address, candidate string, lookup func(string) ([]net.IPAddr, error)) string {
 	dsm, err := url.Parse(address)
 	if err != nil || dsm.Scheme != "http" || dsm.Hostname() == "" {
