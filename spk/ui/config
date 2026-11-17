@@ -1,18 +1,18 @@
 {
-  "QiDocker-0014.js": {
+  "QiDocker-0015.js": {
     "SYNO.SDS.QiDocker.Instance": {
       "type": "app",
       "title": "QiDocker",
       "appWindow": "SYNO.SDS.QiDocker.MainWindow",
       "allUsers": false,
       "allowMultiInstance": false,
-      "icon": "icon_0014_{0}.png",
+      "icon": "icon_0015_{0}.png",
       "depend": ["SYNO.SDS.QiDocker.MainWindow"]
     },
     "SYNO.SDS.QiDocker.MainWindow": {
       "type": "lib",
       "title": "QiDocker",
-      "icon": "icon_0014_{0}.png"
+      "icon": "icon_0015_{0}.png"
     }
   }
 }

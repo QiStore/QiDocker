@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"encoding/binary"
+	"net"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -150,5 +151,27 @@ func TestPreferDSMProxyTLS(t *testing.T) {
 	}
 	if got := preferDSMProxyTLS("https://proxy.example", func(string) bool { t.Fatal("explicit HTTPS should not be probed"); return false }); got != "https://proxy.example" {
 		t.Fatal("explicit HTTPS address must not change")
+	}
+}
+
+func TestPreferNativeTLSProxy(t *testing.T) {
+	dsm := "http://dsm-user:secret@proxy.example:17895"
+	native := "https://other-user:other-secret@tls.example:17896"
+	lookup := func(host string) ([]net.IPAddr, error) {
+		return []net.IPAddr{{IP: net.ParseIP("192.0.2.10")}}, nil
+	}
+	if got := preferNativeTLSProxy(dsm, native, lookup); got != "https://dsm-user:secret@tls.example:17896" {
+		t.Fatal("the native endpoint must inherit DSM credentials")
+	}
+	if got := preferNativeTLSProxy(dsm, native, func(host string) ([]net.IPAddr, error) {
+		if host == "tls.example" {
+			return []net.IPAddr{{IP: net.ParseIP("192.0.2.10")}, {IP: net.ParseIP("192.0.2.11")}}, nil
+		}
+		return lookup(host)
+	}); got != dsm {
+		t.Fatal("do not forward DSM credentials to unrecognized destinations")
+	}
+	if got := preferNativeTLSProxy("", native, lookup); got != "" {
+		t.Fatal("DSM disabled must not use native proxy")
 	}
 }

@@ -14,7 +14,7 @@ QiStore 为 Synology DSM 开发的独立 Docker Engine 套件。在 DSM 主菜�
 (cd dist && sha256sum -c ./*.sha256)
 ```
 
-构建脚本核对各上游发行标签的 commit。二进制和上游许可随 SPK 打包。测试和构建日志位于 [GitHub Actions](https://github.com/QiStore/QiDocker/actions)。通过 DSM 验收后，推送对应的版本标签（例如 `v0.1.0-0014`），工作流会重新构建、运行 Linux 验收并发布通过校验的 SPK 与日志。
+构建脚本核对各上游发行标签的 commit。二进制和上游许可随 SPK 打包。测试和构建日志位于 [GitHub Actions](https://github.com/QiStore/QiDocker/actions)。通过 DSM 验收后，推送对应的版本标签（例如 `v0.1.0-0015`），工作流会重新构建、运行 Linux 验收并发布通过校验的 SPK 与日志。
 
 ## 安装、运行和卸载
 
@@ -33,7 +33,7 @@ sudo /var/packages/QiDocker/target/bin/qidocker-cli compose version
 
 ## 代理
 
-默认跟随 DSM，读取 DSM 的 `/etc/proxy.conf` 中的启用状态、地址、端口和认证，并尝试识别同一入口的 TLS 支持。「跟随 DSM」无需填写任何字段。旧版保存在此模式下的专用入口和协议设置会被忽略。自定义入口请使用「自定义」模式。
+默认跟随 DSM，读取 DSM 的 `/etc/proxy.conf` 中的启用状态、地址、端口和认证，并尝试识别同一入口的 TLS 支持。若该入口只提供明文，而本机原生 Docker 已为同一台代理服务器配置 HTTPS，QiDocker 会复用其 HTTPS 入口，认证仍取自 DSM。「跟随 DSM」无需填写任何字段。旧版保存在此模式下的专用入口和协议设置会被忽略。自定义入口请使用「自定义」模式。
 
 「设置」可切换到自定义代理或直连。自定义代理填写完整 URL，例如 `http://proxy.example:3128`，并在账号和密码字段填写认证。代理协议指连接代理本身使用的协议，HTTPS 目标也可以经 HTTP 代理 CONNECT 转发。「测试已保存设置」会检查代理地址和对 Docker Hub Registry、Auth 的访问。诊断会主动测试 Docker Hub 的代理路径。
 

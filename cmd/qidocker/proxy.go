@@ -207,6 +207,73 @@ func proxyErrorDetail(err error) string {
 
 // Probe the same host and port without proxy authentication. An explicitly
 // configured HTTPS address is never rewritten and credentials are not probed.
+// Use the official Docker daemon's configured TLS route as a read-only
+// hint. Its credentials are never used for QiDocker.
+func nativeDockerTLSProxy(ctx context.Context) string {
+	const socket = "/var/run/docker.sock"
+	info, err := os.Stat(socket)
+	if err != nil || info.Mode()&os.ModeSocket == 0 {
+		return ""
+	}
+	stat, ok := info.Sys().(*syscall.Stat_t)
+	if !ok || stat.Uid != 0 {
+		return ""
+	}
+	client := unixClient(socket)
+	defer client.CloseIdleConnections()
+	req, err := http.NewRequestWithContext(ctx, "GET", "http://docker/info", nil)
+	if err != nil {
+		return ""
+	}
+	res, err := client.Do(req)
+	if err != nil {
+		return ""
+	}
+	defer res.Body.Close()
+	var native struct {
+		HTTPSProxy string
+	}
+	if res.StatusCode != http.StatusOK || json.NewDecoder(io.LimitReader(res.Body, 1<<20)).Decode(&native) != nil {
+		return ""
+	}
+	u, err := url.Parse(native.HTTPSProxy)
+	if err != nil || u.Scheme != "https" || u.Hostname() == "" || u.Opaque != "" ||
+		(u.Path != "" && u.Path != "/") || u.ForceQuery || u.RawQuery != "" || u.Fragment != "" {
+		return ""
+	}
+	u.User = nil
+	return u.String()
+}
+
+func preferNativeTLSProxy(address, candidate string, lookup func(string) ([]net.IPAddr, error)) string {
+	dsm, err := url.Parse(address)
+	if err != nil || dsm.Scheme != "http" || dsm.Hostname() == "" {
+		return address
+	}
+	tlsProxy, err := url.Parse(candidate)
+	if err != nil || tlsProxy.Scheme != "https" || tlsProxy.Hostname() == "" {
+		return address
+	}
+	if !strings.EqualFold(dsm.Hostname(), tlsProxy.Hostname()) {
+		dsmIPs, dsmErr := lookup(dsm.Hostname())
+		tlsIPs, tlsErr := lookup(tlsProxy.Hostname())
+		if dsmErr != nil || tlsErr != nil || len(tlsIPs) == 0 {
+			return address
+		}
+		known := make(map[string]bool, len(dsmIPs))
+		for _, ip := range dsmIPs {
+			known[ip.String()] = true
+		}
+		for _, ip := range tlsIPs {
+			if !known[ip.String()] {
+				return address
+			}
+		}
+	}
+	tlsProxy.User = dsm.User
+	return tlsProxy.String()
+}
+
 func preferDSMProxyTLS(address string, detect func(string) bool) string {
 	u, err := url.Parse(address)
 	if err != nil || u.Scheme != "http" || u.Hostname() == "" {

@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -104,6 +105,19 @@ func (m *manager) desired() (proxySettings, error) {
 	if err == nil && settings.Mode == "dsm" {
 		resolved.HTTP = preferDSMProxyTLS(resolved.HTTP, m.dsmProxyUsesTLS)
 		resolved.HTTPS = preferDSMProxyTLS(resolved.HTTPS, m.dsmProxyUsesTLS)
+		if strings.HasPrefix(resolved.HTTP, "http://") || strings.HasPrefix(resolved.HTTPS, "http://") {
+			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+			if candidate := nativeDockerTLSProxy(ctx); candidate != "" {
+				lookup := func(host string) ([]net.IPAddr, error) {
+					return net.DefaultResolver.LookupIPAddr(ctx, host)
+				}
+				resolved.HTTP = preferNativeTLSProxy(resolved.HTTP, candidate, lookup)
+				if resolved.HTTPS != resolved.HTTP {
+					resolved.HTTPS = preferNativeTLSProxy(resolved.HTTPS, candidate, lookup)
+				}
+			}
+			cancel()
+		}
 	}
 	return resolved, err
 }
