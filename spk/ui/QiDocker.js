@@ -3,7 +3,7 @@
     "use strict";
 
     const base = "/webman/3rdparty/QiDocker/";
-    const assetVersion = "0019";
+    const assetVersion = "0020";
     const pages = ["总览", "容器", "注册表", "映像", "网络", "日志", "设置"];
 
     function node(tag, parent, text) {
@@ -173,21 +173,36 @@
             const error = message => { feedback.textContent = message; };
             const reload = () => change(index);
             const btn = (where, label, handler) => button(where, label, handler, error);
-            let detailPanel;
-            let detailRevision = 0;
-            const showContainerPanel = async (action, id, title, render) => {
-                const request = ++detailRevision;
-                const result = await api(action, {id});
-                if (generation !== revision || request !== detailRevision) return;
-                if (detailPanel) detailPanel.remove();
-                detailPanel = node("div", body);
-                detailPanel.className = "qd-detail-panel";
-                const header = node("div", detailPanel);
+            let containerPanel;
+            const closeContainerPanel = () => {
+                clearInterval(timer);
+                if (containerPanel) containerPanel.remove();
+                containerPanel = null;
+            };
+            const openContainerPanel = title => {
+                closeContainerPanel();
+                const panel = node("div", body);
+                containerPanel = panel;
+                panel.className = "qd-detail-panel";
+                const header = node("div", panel);
                 header.className = "qd-detail-header";
                 node("h2", header, title);
-                btn(header, "关闭", () => { detailRevision++; detailPanel.remove(); detailPanel = null; });
-                if (result) render(detailPanel, result);
-                else node("p", detailPanel, "暂无数据");
+                btn(header, "关闭", closeContainerPanel);
+                return panel;
+            };
+            const isCurrentPanel = panel => generation === revision && containerPanel === panel;
+            const showContainerPanel = async (action, id, title, render) => {
+                const panel = openContainerPanel(title);
+                const status = node("p", panel, "正在加载…");
+                try {
+                    const result = await api(action, {id});
+                    if (!isCurrentPanel(panel)) return;
+                    status.remove();
+                    if (result) render(panel, result);
+                    else node("p", panel, "暂无数据");
+                } catch (issue) {
+                    if (isCurrentPanel(panel)) status.textContent = issue.message;
+                }
             };
             const details = async (action, id, text) => {
                 const result = await api(action, {id});
@@ -231,7 +246,7 @@
 
             async function containers() {
                 btn(body, "创建容器", () => {
-                    const pane = node("div", body);
+                    const pane = openContainerPanel("创建容器");
                     const read = fields(pane, [
                         ["name","容器名"], ["image","映像"], ["command","命令（JSON 数组）", "", "textarea"],
                         ["env","环境变量（每行 KEY=VALUE）","","textarea"],
@@ -257,10 +272,12 @@
                         });
                         reload();
                     });
-                    btn(pane, "取消", () => pane.remove());
+                    btn(pane, "取消", closeContainerPanel);
                 });
+                const list = node("div", body);
                 const rows = await api("containers");
-                table(body, ["名称","映像","状态"], rows.map(item => [[item.Names.join(", "), item.Image, item.Status], item]), (cell, item) => {
+                if (generation !== revision) return;
+                table(list, ["名称","映像","状态"], rows.map(item => [[item.Names.join(", "), item.Image, item.Status], item]), (cell, item) => {
                     const id = item.Id;
                     btn(cell,"详情", () => showContainerPanel("container", id, "容器详情", containerDetails));
                     btn(cell,"资源", () => showContainerPanel("stats", id, "容器资源统计", resourceDetails));
@@ -268,16 +285,34 @@
                         btn(cell,name,async () => { await api(action,{id},{}); reload(); });
                     });
                     btn(cell,"日志",() => {
-                        const output = node("pre",body);
-                        clearInterval(timer);
-                        refresh(async () => { output.textContent = await api("logs",{id},undefined,"text"); });
+                        const panel = openContainerPanel("容器日志");
+                        const output = node("pre", panel, "正在加载…");
+                        let loading = false;
+                        refresh(async () => {
+                            if (loading || !isCurrentPanel(panel)) return;
+                            loading = true;
+                            try {
+                                const logs = await api("logs", {id}, undefined, "text");
+                                if (isCurrentPanel(panel)) output.textContent = logs || "暂无日志";
+                            } catch (issue) {
+                                if (isCurrentPanel(panel)) output.textContent = issue.message;
+                            } finally {
+                                loading = false;
+                            }
+                        });
                     });
                     btn(cell,"执行命令",() => {
-                        const pane = node("div",body);
-                        const read = fields(pane,[["command","容器内 Shell 命令"]]);
-                        const output = node("pre",pane);
-                        btn(pane,"执行",async () => { output.textContent = await api("exec",{id},read(),"text"); });
-                        btn(pane,"关闭",() => pane.remove());
+                        const pane = openContainerPanel("执行命令");
+                        const read = fields(pane, [["command", "容器内 Shell 命令"]]);
+                        const output = node("pre", pane);
+                        btn(pane, "执行", async () => {
+                            try {
+                                const result = await api("exec", {id}, read(), "text");
+                                if (isCurrentPanel(pane)) output.textContent = result;
+                            } catch (issue) {
+                                if (isCurrentPanel(pane)) output.textContent = issue.message;
+                            }
+                        });
                     });
                     btn(cell,"删除", () => remove("remove",{id}));
                 });
