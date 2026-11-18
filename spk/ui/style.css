@@ -20,8 +20,6 @@
 .qd-desktop td,.qd-desktop th {padding:7px;border-bottom:1px solid #dce4ed;vertical-align:middle;overflow-wrap:anywhere}
 .qd-desktop th {background:#f4f7fa}
 .qd-desktop pre {background:#f4f7fa;padding:10px;margin:8px 0;white-space:pre-wrap;overflow-wrap:anywhere;max-height:400px;overflow:auto}
-.qd-desktop .qd-feedback {color:#aa3b31;white-space:pre-wrap;margin:5px 0}
-.qd-desktop .qd-feedback:empty {display:none}
 .qd-desktop .qd-form {display:grid;gap:6px;margin:12px 0}
 .qd-desktop .qd-form label {display:grid;grid-template-columns:180px minmax(0,1fr);align-items:center;gap:6px}
 .qd-desktop input,.qd-desktop select,.qd-desktop textarea {border:1px solid #bccad7;border-radius:2px;padding:4px;font:inherit;min-width:0;background:white}

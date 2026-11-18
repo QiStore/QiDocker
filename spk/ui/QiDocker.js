@@ -3,7 +3,7 @@
     "use strict";
 
     const base = "/webman/3rdparty/QiDocker/";
-    const assetVersion = "0021";
+    const assetVersion = "0022";
     const pages = ["总览", "容器", "注册表", "映像", "网络", "日志", "设置"];
 
     function node(tag, parent, text) {
@@ -177,10 +177,10 @@
             const revision = ++generation;
             content.replaceChildren();
             [...nav.children].forEach((child, i) => child.classList.toggle("active", i === index));
-            const feedback = node("div", content);
-            feedback.className = "qd-feedback";
             const body = node("div", content);
-            const error = message => { feedback.textContent = message; };
+            const error = message => {
+                if (generation === revision) window.alert(message);
+            };
             const reload = () => change(index);
             const btn = (where, label, handler) => button(where, label, handler, error);
             let containerPanel;
@@ -220,8 +220,46 @@
                 btn(body, "关闭详情", () => out.remove());
             };
             const refresh = callback => {
-                callback().catch(issue => error(issue.message));
-                timer = setInterval(() => callback().catch(issue => error(issue.message)), 3000);
+                let lastError;
+                const update = async () => {
+                    try {
+                        await callback();
+                        lastError = undefined;
+                    } catch (issue) {
+                        if (issue.message !== lastError) error(issue.message);
+                        lastError = issue.message;
+                    }
+                };
+                update();
+                timer = setInterval(update, 3000);
+            };
+            const showLogs = (panel, action, clearAction, query, current, confirmation, label) => {
+                let loading = false, clearing = false, version = 0;
+                btn(panel, label, async () => {
+                    if (!window.confirm(confirmation)) return;
+                    clearing = true;
+                    version++;
+                    try {
+                        await api(clearAction, query, {});
+                        if (current()) output.textContent = "暂无日志";
+                    } finally {
+                        clearing = false;
+                    }
+                });
+                const output = node("pre", panel, "正在加载…");
+                refresh(async () => {
+                    if (loading || clearing || !current()) return;
+                    loading = true;
+                    const requestedVersion = version;
+                    try {
+                        const logs = await api(action, query, undefined, "text");
+                        if (current() && requestedVersion === version) output.textContent = logs || "暂无日志";
+                    } catch (issue) {
+                        if (current() && requestedVersion === version) throw issue;
+                    } finally {
+                        loading = false;
+                    }
+                });
             };
             const remove = async (action, query) => {
                 if (window.confirm("确认删除？")) { await api(action, query, {}); reload(); }
@@ -292,24 +330,12 @@
                     btn(cell,"详情", () => showContainerPanel("container", id, "容器详情", containerDetails));
                     btn(cell,"资源", () => showContainerPanel("stats", id, "容器资源统计", resourceDetails));
                     [["启动","start"],["停止","stop"],["重启","restart"],["暂停","pause"],["恢复","unpause"]].forEach(([name, action]) => {
-                        btn(cell,name,async () => { await api(action, {id}, null); reload(); });
+                        btn(cell,name,async () => { await api(action, {id}, {}); reload(); });
                     });
                     btn(cell,"日志",() => {
                         const panel = openContainerPanel("容器日志");
-                        const output = node("pre", panel, "正在加载…");
-                        let loading = false;
-                        refresh(async () => {
-                            if (loading || !isCurrentPanel(panel)) return;
-                            loading = true;
-                            try {
-                                const logs = await api("logs", {id}, undefined, "text");
-                                if (isCurrentPanel(panel)) output.textContent = logs || "暂无日志";
-                            } catch (issue) {
-                                if (isCurrentPanel(panel)) output.textContent = issue.message;
-                            } finally {
-                                loading = false;
-                            }
-                        });
+                        showLogs(panel, "logs", "clear-logs", {id}, () => isCurrentPanel(panel),
+                            "清空此容器的日志视图？Docker 保存的历史日志会保留。", "清空日志视图");
                     });
                     btn(cell,"执行命令",() => {
                         const pane = openContainerPanel("执行命令");
@@ -497,7 +523,8 @@
             }
             const handlers = [
                 () => refresh(overview), containers, registries, images, networks,
-                () => { const log = node("pre",body); refresh(async () => { log.textContent = await api("engine-log",{},undefined,"text"); }); },
+                () => showLogs(body, "engine-log", "clear-engine-log", {}, () => generation === revision,
+                    "确定清空 Docker Engine 日志？", "清空日志"),
                 settings
             ];
             Promise.resolve(handlers[index]()).catch(issue => error(issue.message));

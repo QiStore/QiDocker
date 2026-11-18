@@ -145,7 +145,7 @@ func (m *manager) handle(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "请求方法错误", 405)
 			return
 		}
-	case "proxy-save", "proxy-test", "proxy-apply", "registry-login", "registry-logout", "exec":
+	case "proxy-save", "proxy-test", "proxy-apply", "registry-login", "registry-logout", "exec", "clear-logs", "clear-engine-log":
 		if r.Method != "POST" {
 			http.Error(w, "请求方法错误", 405)
 			return
@@ -166,6 +166,30 @@ func (m *manager) handle(w http.ResponseWriter, r *http.Request) {
 		return
 	case "engine-log":
 		m.engineLog(w)
+		return
+	case "clear-engine-log":
+		if err := os.Truncate(filepath.Join(m.state, "engine.log"), 0); err != nil && !os.IsNotExist(err) {
+			http.Error(w, "无法清空引擎日志", 500)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+		return
+	case "clear-logs":
+		id := r.URL.Query().Get("id")
+		if len(id) != 64 || !dockerID.MatchString(id) {
+			http.Error(w, "无效容器 ID", 400)
+			return
+		}
+		dir := filepath.Join(m.state, "log-cutoffs")
+		err := os.MkdirAll(dir, 0700)
+		if err == nil {
+			err = privateJSON(filepath.Join(dir, id), time.Now().UTC().Format(time.RFC3339Nano))
+		}
+		if err != nil {
+			http.Error(w, "无法清空容器日志视图", 500)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
 		return
 	case "exec":
 		m.execute(w, r)
@@ -193,6 +217,17 @@ func (m *manager) handle(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		op.path = fmt.Sprintf(op.path, id)
+		if action == "logs" && len(id) == 64 {
+			raw, err := os.ReadFile(filepath.Join(m.state, "log-cutoffs", id))
+			if err != nil && !os.IsNotExist(err) {
+				http.Error(w, "无法读取容器日志设置", 500)
+				return
+			}
+			var since string
+			if err == nil && json.Unmarshal(raw, &since) == nil {
+				op.path += "&" + url.Values{"since": {since}}.Encode()
+			}
+		}
 	}
 	headers := make(http.Header)
 	var body io.Reader
