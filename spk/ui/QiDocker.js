@@ -3,7 +3,7 @@
     "use strict";
 
     const base = "/webman/3rdparty/QiDocker/";
-    const assetVersion = "0022";
+    const assetVersion = "0023";
     const pages = ["总览", "容器", "注册表", "映像", "网络", "日志", "设置"];
 
     function node(tag, parent, text) {
@@ -94,6 +94,52 @@
         table(parent, headings, rows.map(values => [values.map(value => value == null || value === "" ? "—" : value)]));
     }
 
+    function detailDate(value) {
+        if (!value || value.startsWith("0001-")) return "—";
+        const time = new Date(value);
+        return Number.isNaN(time.getTime()) ? value : time.toLocaleString();
+    }
+
+    function networkDetails(parent, data) {
+        const ipam = data.IPAM || {};
+        const yesNo = value => value == null ? "—" : value ? "是" : "否";
+        detailTable(parent, "基本信息", ["项目", "内容"], [
+            ["名称", data.Name], ["网络 ID", data.Id], ["驱动", data.Driver], ["范围", data.Scope],
+            ["创建时间", detailDate(data.Created)], ["IPv4", yesNo(data.EnableIPv4)], ["IPv6", yesNo(data.EnableIPv6)],
+            ["内部网络", yesNo(data.Internal)], ["允许手动接入", yesNo(data.Attachable)],
+            ["入口网络", yesNo(data.Ingress)], ["地址管理驱动", ipam.Driver]
+        ]);
+        detailTable(parent, "地址分配", ["子网", "网关", "地址范围"],
+            (ipam.Config || []).map(config => [config.Subnet, config.Gateway, config.IPRange]));
+        detailTable(parent, "已连接容器", ["名称", "IPv4", "IPv6", "MAC 地址"],
+            Object.entries(data.Containers || {}).map(([id, item]) => [item.Name || id, item.IPv4Address, item.IPv6Address, item.MacAddress]));
+        for (const [title, values] of [["驱动选项", data.Options], ["地址管理选项", ipam.Options], ["标签", data.Labels]]) {
+            if (values && Object.keys(values).length) detailTable(parent, title, ["名称", "值"], Object.entries(values));
+        }
+    }
+
+    function imageDetails(parent, data) {
+        const config = data.Config || {};
+        detailTable(parent, "基本信息", ["项目", "内容"], [
+            ["映像 ID", data.Id], ["创建时间", detailDate(data.Created)], ["系统", data.Os],
+            ["架构", [data.Architecture, data.Variant].filter(Boolean).join(" / ")],
+            ["大小", Number.isFinite(data.Size) ? (data.Size / 1048576).toFixed(1) + " MiB" : "—"],
+            ["工作目录", config.WorkingDir], ["运行用户", config.User]
+        ]);
+        detailTable(parent, "仓库引用", ["类型", "引用"], [
+            ...(data.RepoTags || []).map(tag => ["标签", tag]),
+            ...(data.RepoDigests || []).map(digest => ["摘要", digest])
+        ]);
+        detailTable(parent, "启动参数", ["类型", "参数"], [
+            ...(config.Entrypoint || []).map(value => ["入口", value]),
+            ...(config.Cmd || []).map(value => ["默认命令", value])
+        ]);
+        const ports = Object.keys(config.ExposedPorts || {});
+        if (ports.length) detailTable(parent, "公开端口", ["端口 / 协议"], ports.map(port => [port]));
+        const labels = Object.entries(config.Labels || {});
+        if (labels.length) detailTable(parent, "标签", ["名称", "值"], labels);
+    }
+
     function containerDetails(parent, data) {
         const config = data.Config || {};
         const state = data.State || {};
@@ -101,16 +147,11 @@
         const network = data.NetworkSettings || {};
         const states = {created: "已创建", running: "运行中", paused: "已暂停", restarting: "重启中",
             removing: "删除中", exited: "已停止", dead: "异常停止"};
-        const date = value => {
-            if (!value || value.startsWith("0001-")) return "—";
-            const time = new Date(value);
-            return Number.isNaN(time.getTime()) ? value : time.toLocaleString();
-        };
         const command = [data.Path, ...(data.Args || [])].filter(Boolean).join(" ");
         detailTable(parent, "基本信息", ["项目", "内容"], [
             ["名称", (data.Name || "").replace(/^\//, "")], ["状态", states[state.Status] || state.Status],
             ["映像", config.Image], ["容器 ID", data.Id], ["启动命令", command],
-            ["创建时间", date(data.Created)], ["启动时间", date(state.StartedAt)],
+            ["创建时间", detailDate(data.Created)], ["启动时间", detailDate(state.StartedAt)],
             ["重启策略", host.RestartPolicy && host.RestartPolicy.Name]
         ]);
         const configuredPorts = host.PortBindings || {};
@@ -183,26 +224,26 @@
             };
             const reload = () => change(index);
             const btn = (where, label, handler) => button(where, label, handler, error);
-            let containerPanel;
-            const closeContainerPanel = () => {
+            let activePanel;
+            const closePanel = () => {
                 clearInterval(timer);
-                if (containerPanel) containerPanel.remove();
-                containerPanel = null;
+                if (activePanel) activePanel.remove();
+                activePanel = null;
             };
-            const openContainerPanel = title => {
-                closeContainerPanel();
+            const openPanel = title => {
+                closePanel();
                 const panel = node("div", body);
-                containerPanel = panel;
+                activePanel = panel;
                 panel.className = "qd-detail-panel";
                 const header = node("div", panel);
                 header.className = "qd-detail-header";
                 node("h2", header, title);
-                btn(header, "关闭", closeContainerPanel);
+                btn(header, "关闭", closePanel);
                 return panel;
             };
-            const isCurrentPanel = panel => generation === revision && containerPanel === panel;
-            const showContainerPanel = async (action, id, title, render) => {
-                const panel = openContainerPanel(title);
+            const isCurrentPanel = panel => generation === revision && activePanel === panel;
+            const showDetails = async (action, id, title, render) => {
+                const panel = openPanel(title);
                 const status = node("p", panel, "正在加载…");
                 try {
                     const result = await api(action, {id});
@@ -213,11 +254,6 @@
                 } catch (issue) {
                     if (isCurrentPanel(panel)) status.textContent = issue.message;
                 }
-            };
-            const details = async (action, id, text) => {
-                const result = await api(action, {id});
-                const out = node("pre", body, text + "\n" + JSON.stringify(result, null, 2));
-                btn(body, "关闭详情", () => out.remove());
             };
             const refresh = callback => {
                 let lastError;
@@ -294,9 +330,9 @@
 
             async function containers() {
                 btn(body, "创建容器", () => {
-                    const pane = openContainerPanel("创建容器");
+                    const pane = openPanel("创建容器");
                     const read = fields(pane, [
-                        ["name","容器名"], ["image","映像"], ["command","命令（JSON 数组）", "", "textarea"],
+                        ["name","容器名"], ["image","映像"], ["command","命令及参数（每行一个，首行为命令）", "", "textarea"],
                         ["env","环境变量（每行 KEY=VALUE）","","textarea"],
                         ["binds","卷挂载（每行来源:目标[:ro]）","","textarea"],
                         ["ports","端口映射（每行 主机端口:容器端口/protocol）","","textarea"],
@@ -315,30 +351,30 @@
                             (bindings[port] ||= []).push({HostPort: host});
                         });
                         await api("create", {name: v.name}, {
-                            Image: v.image, Cmd: v.command ? JSON.parse(v.command) : undefined, Env: lines(v.env),
+                            Image: v.image, Cmd: v.command.trim() ? v.command.replace(/\r/g, "").split("\n") : undefined, Env: lines(v.env),
                             ExposedPorts: exposed, HostConfig: {Binds: lines(v.binds), PortBindings: bindings, NetworkMode: v.network}
                         });
                         reload();
                     });
-                    btn(pane, "取消", closeContainerPanel);
+                    btn(pane, "取消", closePanel);
                 });
                 const list = node("div", body);
                 const rows = await api("containers");
                 if (generation !== revision) return;
                 table(list, ["名称","映像","状态"], rows.map(item => [[item.Names.join(", "), item.Image, item.Status], item]), (cell, item) => {
                     const id = item.Id;
-                    btn(cell,"详情", () => showContainerPanel("container", id, "容器详情", containerDetails));
-                    btn(cell,"资源", () => showContainerPanel("stats", id, "容器资源统计", resourceDetails));
+                    btn(cell,"详情", () => showDetails("container", id, "容器详情", containerDetails));
+                    btn(cell,"资源", () => showDetails("stats", id, "容器资源统计", resourceDetails));
                     [["启动","start"],["停止","stop"],["重启","restart"],["暂停","pause"],["恢复","unpause"]].forEach(([name, action]) => {
                         btn(cell,name,async () => { await api(action, {id}, {}); reload(); });
                     });
                     btn(cell,"日志",() => {
-                        const panel = openContainerPanel("容器日志");
+                        const panel = openPanel("容器日志");
                         showLogs(panel, "logs", "clear-logs", {id}, () => isCurrentPanel(panel),
                             "清空此容器的日志视图？Docker 保存的历史日志会保留。", "清空日志视图");
                     });
                     btn(cell,"执行命令",() => {
-                        const pane = openContainerPanel("执行命令");
+                        const pane = openPanel("执行命令");
                         const read = fields(pane, [["command", "容器内 Shell 命令"]]);
                         const output = node("pre", pane);
                         btn(pane, "执行", async () => {
@@ -406,13 +442,22 @@
                 btn(body,"导入",async () => {
                     if (!file.files[0]) throw new Error("请选择映像归档");
                     const result = await api("import",{},file.files[0],"text");
-                    node("pre",body,result);
+                    const messages = result.split("\n").filter(line => line.trim()).flatMap(line => {
+                        let entry;
+                        try { entry = JSON.parse(line); }
+                        catch { return [[line.trim()]]; }
+                        const failure = entry.errorDetail?.message || entry.error;
+                        if (failure) throw new Error(failure);
+                        return [entry.stream, entry.status].filter(Boolean).map(message => [message.trim()]);
+                    });
+                    const panel = openPanel("映像导入结果");
+                    detailTable(panel, "导入记录", ["消息"], messages.length ? messages : [["导入完成"]]);
                 });
                 btn(body,"刷新", reload);
                 const rows = await api("images");
                 table(body, ["标签","大小"], rows.map(item => [[(item.RepoTags || []).join(", "), (item.Size / 1048576).toFixed(1) + " MB"],item]), (cell,item) => {
                     const id = item.Id;
-                    btn(cell,"详情", () => details("image",id,"映像详情"));
+                    btn(cell,"详情", () => showDetails("image", id, "映像详情", imageDetails));
                     btn(cell,"添加标签", () => {
                         const row = node("div",body);
                         const values = fields(row,[["repo","仓库"],["tag","标签","latest"]]);
@@ -450,7 +495,7 @@
                 btn(body,"创建网络",async () => { await api("create-network",{},read()); reload(); });
                 const rows = await api("networks");
                 table(body,["名称","驱动","范围"],rows.map(item => [[item.Name,item.Driver,item.Scope],item]),(cell,item) => {
-                    btn(cell,"详情",() => details("network",item.Id,"网络详情"));
+                    btn(cell,"详情",() => showDetails("network", item.Id, "网络详情", networkDetails));
                     btn(cell,"删除",() => remove("remove-network",{id:item.Id}));
                 });
             }
