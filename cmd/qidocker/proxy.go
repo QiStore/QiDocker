@@ -399,12 +399,13 @@ func testProxy(ctx context.Context, p proxySettings, caPaths ...string) []probeR
 			add("代理 TLS", true, "代理证书和 TLS 握手通过")
 		}
 		transport.Proxy = http.ProxyURL(proxy)
-		transport.OnProxyConnectResponse = func(_ context.Context, _ *url.URL, _ *http.Request, res *http.Response) error {
+		transport.OnProxyConnectResponse = func(_ context.Context, _ *url.URL, req *http.Request, res *http.Response) error {
 			ok := res.StatusCode == http.StatusOK
-			add("HTTP CONNECT", ok, fmt.Sprintf("HTTP %d", res.StatusCode))
-			if proxy.User != nil || res.StatusCode == http.StatusProxyAuthRequired {
-				add("代理认证", ok, fmt.Sprintf("HTTP %d", res.StatusCode))
+			detail := fmt.Sprintf("HTTP %d", res.StatusCode)
+			if res.StatusCode == http.StatusProxyAuthRequired {
+				detail += " · 代理要求认证"
 			}
+			add("CONNECT "+req.Host, ok, detail)
 			return nil
 		}
 	}
@@ -424,8 +425,15 @@ func testProxy(ctx context.Context, p proxySettings, caPaths ...string) []probeR
 		}
 		_, _ = io.Copy(io.Discard, io.LimitReader(res.Body, 1<<20))
 		res.Body.Close()
-		add(check.name+" TLS", res.TLS != nil && res.TLS.Version >= tls.VersionTLS12, "HTTPS 握手")
-		add(check.name, res.StatusCode == check.expect, fmt.Sprintf("HTTP %d", res.StatusCode))
+		tlsOK := res.TLS != nil && res.TLS.Version >= tls.VersionTLS12
+		detail := fmt.Sprintf("HTTP %d", res.StatusCode)
+		if tlsOK {
+			detail = "TLS 已通过 · " + detail
+		}
+		if check.expect == http.StatusUnauthorized && res.StatusCode == check.expect {
+			detail += "（正常认证质询）"
+		}
+		add(check.name, tlsOK && res.StatusCode == check.expect, detail)
 	}
 	return result
 }

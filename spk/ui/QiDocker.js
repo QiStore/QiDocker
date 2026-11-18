@@ -3,7 +3,7 @@
     "use strict";
 
     const base = "/webman/3rdparty/QiDocker/";
-    const assetVersion = "0016";
+    const assetVersion = "0017";
     const pages = ["总览", "容器", "注册表", "映像", "网络", "日志", "设置"];
 
     function node(tag, parent, text) {
@@ -338,7 +338,16 @@
                 let testResults;
                 btn(body,"测试已保存设置",async () => {
                     testResults.replaceChildren();
-                    const rows = await api("proxy-test",{},{});
+                    const progress = node("p", testResults, "正在测试代理和 Docker Hub…");
+                    let rows;
+                    try {
+                        rows = await api("proxy-test",{},{});
+                    } finally {
+                        progress.remove();
+                    }
+                    const failed = rows.filter(item => !item.ok).length;
+                    const summary = failed ? "测试完成，" + failed + " 项失败" : "代理和 Docker Hub 检查全部通过";
+                    node("strong", testResults, summary);
                     table(testResults,["检查项","结果","详情"],rows.map(item => [[item.name,item.ok ? "通过" : "失败",item.detail]]));
                 });
                 btn(body,"立即重启并应用",async () => {
@@ -379,7 +388,7 @@
             const config = Ext.apply({
                 title: "QiDocker", width: 1060, height: 570, minWidth: 730, minHeight: 430
             }, args);
-            config.icon = base + "icon_0016_24.png";
+            config.icon = base + "icon_0017_24.png";
             cls.MainWindow.superclass.constructor.call(this, config);
         },
         afterRender: function () {
