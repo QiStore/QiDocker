@@ -181,6 +181,9 @@ func stop(cmd *exec.Cmd, done <-chan error) {
 }
 
 func (m *manager) supervise(ctx context.Context) {
+	moduleCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	loadBridgeModules(moduleCtx)
+	cancel()
 	for ctx.Err() == nil {
 		m.mu.Lock()
 		settings, err := m.desired()
@@ -277,6 +280,7 @@ func serve(state, target string) error {
 	defer cancel()
 	stopped := make(chan struct{})
 	go func() { defer close(stopped); m.supervise(ctx) }()
+	go m.watchBridges(ctx)
 	server := &http.Server{Handler: http.HandlerFunc(m.handle), ReadHeaderTimeout: 5 * time.Second, MaxHeaderBytes: 16 << 10}
 	go func() { <-ctx.Done(); server.Close() }()
 	err = server.Serve(socket)

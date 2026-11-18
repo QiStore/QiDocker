@@ -54,3 +54,33 @@ start
 "$bin/docker" run --rm --network none hello-world:latest | grep -F 'Hello from Docker!'
 "$bin/docker-compose" version
 "$bin/runc" --version
+
+# The offline smoke test can run with only a hello-world image archive.
+if [[ -z "$existing_image" ]]; then
+    "$bin/docker" pull nginx:alpine
+    "$bin/docker" network create qidocker-smoke
+    bridge="br-$("$bin/docker" network inspect -f '{{.Id}}' qidocker-smoke | cut -c1-12)"
+    check_ports() {
+        local name endpoint
+        for name in qidocker-web-a qidocker-web-b; do
+            endpoint=$("$bin/docker" port "$name" 80/tcp)
+            curl -q --noproxy 127.0.0.1 --fail --silent --show-error \
+                --retry 5 --retry-all-errors --max-time 3 "http://$endpoint/" >/dev/null
+        done
+        local flags
+        for _ in {1..10}; do
+            flags=$(cat "/sys/class/net/$bridge/flags")
+            if (( flags & 256 )); then return; fi
+            sleep 1
+        done
+        return 1
+    }
+    for name in qidocker-web-a qidocker-web-b; do
+        "$bin/docker" run -d --restart always --name "$name" \
+            --network qidocker-smoke -p 127.0.0.1::80 nginx:alpine
+    done
+    check_ports
+    stop
+    start
+    check_ports
+fi
