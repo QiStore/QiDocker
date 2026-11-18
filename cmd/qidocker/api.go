@@ -199,7 +199,7 @@ func (m *manager) handle(w http.ResponseWriter, r *http.Request) {
 	if action == "import" {
 		headers.Set("Content-Type", "application/x-tar")
 		body = http.MaxBytesReader(w, r.Body, 10<<30)
-	} else if method == "POST" {
+	} else if action == "create" || action == "create-network" {
 		headers.Set("Content-Type", "application/json")
 		body = http.MaxBytesReader(w, r.Body, 1<<20)
 	}
@@ -247,6 +247,10 @@ func (m *manager) handle(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer res.Body.Close()
+	if res.StatusCode == http.StatusNotModified && (action == "start" || action == "stop") {
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
 	w.Header().Set("Content-Type", res.Header.Get("Content-Type"))
 	if action == "export" {
 		w.Header().Set("Content-Disposition", `attachment; filename="qidocker-image.tar"`)

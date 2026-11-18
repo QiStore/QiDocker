@@ -3,7 +3,7 @@
     "use strict";
 
     const base = "/webman/3rdparty/QiDocker/";
-    const assetVersion = "0020";
+    const assetVersion = "0021";
     const pages = ["总览", "容器", "注册表", "映像", "网络", "日志", "设置"];
 
     function node(tag, parent, text) {
@@ -20,10 +20,20 @@
         if (typeof token === "string" && token) options.headers["X-SYNO-TOKEN"] = token;
         if (payload !== undefined) {
             options.method = "POST";
-            options.body = payload instanceof Blob ? payload : JSON.stringify(payload);
+            if (payload !== null) options.body = payload instanceof Blob ? payload : JSON.stringify(payload);
         }
         const response = await fetch(base + "control.cgi?" + params, options);
-        if (!response.ok) throw new Error((await response.text()).slice(0, 500) || "HTTP " + response.status);
+        if (!response.ok) {
+            const raw = (await response.text()).trim();
+            let message = raw;
+            try {
+                const error = JSON.parse(raw);
+                message = error && typeof error.message === "string" ? error.message : "";
+            } catch {
+                if (raw.startsWith("<")) message = "";
+            }
+            throw new Error(message.slice(0, 500) || "请求失败（HTTP " + response.status + "）");
+        }
         if (format === "response") return response;
         if (format === "text") return response.text();
         if (response.status === 204) return null;
@@ -282,7 +292,7 @@
                     btn(cell,"详情", () => showContainerPanel("container", id, "容器详情", containerDetails));
                     btn(cell,"资源", () => showContainerPanel("stats", id, "容器资源统计", resourceDetails));
                     [["启动","start"],["停止","stop"],["重启","restart"],["暂停","pause"],["恢复","unpause"]].forEach(([name, action]) => {
-                        btn(cell,name,async () => { await api(action,{id},{}); reload(); });
+                        btn(cell,name,async () => { await api(action, {id}, null); reload(); });
                     });
                     btn(cell,"日志",() => {
                         const panel = openContainerPanel("容器日志");
