@@ -25,3 +25,6 @@
 .qd-desktop .qd-form {display:grid;gap:6px;margin:12px 0}
 .qd-desktop .qd-form label {display:grid;grid-template-columns:180px minmax(0,1fr);align-items:center;gap:6px}
 .qd-desktop input,.qd-desktop select,.qd-desktop textarea {border:1px solid #bccad7;border-radius:2px;padding:4px;font:inherit;min-width:0;background:white}
+.qd-desktop .qd-detail-panel {margin:14px 0;padding:10px 14px;border:1px solid #dce4ed;border-radius:4px}
+.qd-desktop .qd-detail-header {display:flex;align-items:center;justify-content:space-between;gap:8px;border-bottom:1px solid #dce4ed}
+.qd-desktop .qd-detail-header h2 {font-size:16px;margin:8px 0;font-weight:bold}

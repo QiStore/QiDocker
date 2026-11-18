@@ -3,7 +3,7 @@
     "use strict";
 
     const base = "/webman/3rdparty/QiDocker/";
-    const assetVersion = "0017";
+    const assetVersion = "0019";
     const pages = ["总览", "容器", "注册表", "映像", "网络", "日志", "设置"];
 
     function node(tag, parent, text) {
@@ -79,6 +79,83 @@
         if (!rows.length) node("p", parent, "暂无记录");
     }
 
+    function detailTable(parent, title, headings, rows) {
+        node("h3", parent, title);
+        table(parent, headings, rows.map(values => [values.map(value => value == null || value === "" ? "—" : value)]));
+    }
+
+    function containerDetails(parent, data) {
+        const config = data.Config || {};
+        const state = data.State || {};
+        const host = data.HostConfig || {};
+        const network = data.NetworkSettings || {};
+        const states = {created: "已创建", running: "运行中", paused: "已暂停", restarting: "重启中",
+            removing: "删除中", exited: "已停止", dead: "异常停止"};
+        const date = value => {
+            if (!value || value.startsWith("0001-")) return "—";
+            const time = new Date(value);
+            return Number.isNaN(time.getTime()) ? value : time.toLocaleString();
+        };
+        const command = [data.Path, ...(data.Args || [])].filter(Boolean).join(" ");
+        detailTable(parent, "基本信息", ["项目", "内容"], [
+            ["名称", (data.Name || "").replace(/^\//, "")], ["状态", states[state.Status] || state.Status],
+            ["映像", config.Image], ["容器 ID", data.Id], ["启动命令", command],
+            ["创建时间", date(data.Created)], ["启动时间", date(state.StartedAt)],
+            ["重启策略", host.RestartPolicy && host.RestartPolicy.Name]
+        ]);
+        const configuredPorts = host.PortBindings || {};
+        const activePorts = network.Ports || {};
+        const ports = [...new Set([...Object.keys(configuredPorts), ...Object.keys(activePorts)])];
+        detailTable(parent, "端口映射", ["容器端口", "主机地址", "主机端口"], ports.flatMap(port => {
+            const bindings = activePorts[port] || configuredPorts[port] || [];
+            return bindings.length ? bindings.map(binding => [port, binding.HostIp, binding.HostPort || "自动分配"]) :
+                [[port, "—", "未发布"]];
+        }));
+        detailTable(parent, "网络", ["网络名称", "IPv4", "IPv6", "网关"],
+            Object.entries(network.Networks || {}).map(([name, net]) => [name, net.IPAddress, net.GlobalIPv6Address, net.Gateway]));
+        detailTable(parent, "挂载", ["类型", "来源", "容器路径", "权限"],
+            (data.Mounts || []).map(mount => [mount.Type, mount.Source, mount.Destination, mount.RW ? "读写" : "只读"]));
+    }
+
+    function resourceDetails(parent, data) {
+        const current = data.cpu_stats || {};
+        const previous = data.precpu_stats || {};
+        const systemDelta = current.system_cpu_usage - previous.system_cpu_usage;
+        const cpuDelta = (current.cpu_usage || {}).total_usage - (previous.cpu_usage || {}).total_usage;
+        const cores = current.online_cpus || ((current.cpu_usage || {}).percpu_usage || []).length;
+        const cpu = systemDelta > 0 && cpuDelta >= 0 && cores ? cpuDelta / systemDelta * cores * 100 : null;
+        const memory = data.memory_stats || {};
+        const cache = (memory.stats || {}).total_inactive_file ?? (memory.stats || {}).inactive_file ?? 0;
+        const used = Number.isFinite(memory.usage) ? memory.usage - (cache < memory.usage ? cache : 0) : null;
+        const bytes = value => {
+            if (!Number.isFinite(value)) return "—";
+            if (value < 1024) return value + " B";
+            const units = ["KiB", "MiB", "GiB", "TiB"];
+            let i = 0;
+            while (value >= 1024 * 1024 && i < units.length - 1) { value /= 1024; i++; }
+            return (value / 1024).toFixed(1) + " " + units[i];
+        };
+        const cards = node("div", parent);
+        cards.className = "qd-cards";
+        [["CPU 使用率", cpu == null ? "—" : cpu.toFixed(1) + "%", cpu, cores * 100, "cpu"],
+         ["内存使用量", bytes(used) + " / " + bytes(memory.limit), used, memory.limit, "ram"]]
+            .forEach(([title, value, amount, capacity, kind]) => {
+                const card = node("div", cards);
+                card.className = "qd-card " + kind;
+                node("strong", card, title);
+                node("b", card, value);
+                if (amount == null || !capacity) return;
+                const meter = node("progress", card);
+                meter.setAttribute("aria-label", title);
+                meter.max = capacity;
+                meter.value = amount;
+            });
+        const pids = (data.pids_stats || {}).current;
+        if (pids != null) node("p", parent, "进程数 " + pids);
+        detailTable(parent, "网络累计流量", ["接口", "接收", "发送"],
+            Object.entries(data.networks || {}).map(([name, net]) => [name, bytes(net.rx_bytes), bytes(net.tx_bytes)]));
+    }
+
     function tab(root) {
         const nav = node("nav", root);
         const content = node("section", root);
@@ -96,6 +173,22 @@
             const error = message => { feedback.textContent = message; };
             const reload = () => change(index);
             const btn = (where, label, handler) => button(where, label, handler, error);
+            let detailPanel;
+            let detailRevision = 0;
+            const showContainerPanel = async (action, id, title, render) => {
+                const request = ++detailRevision;
+                const result = await api(action, {id});
+                if (generation !== revision || request !== detailRevision) return;
+                if (detailPanel) detailPanel.remove();
+                detailPanel = node("div", body);
+                detailPanel.className = "qd-detail-panel";
+                const header = node("div", detailPanel);
+                header.className = "qd-detail-header";
+                node("h2", header, title);
+                btn(header, "关闭", () => { detailRevision++; detailPanel.remove(); detailPanel = null; });
+                if (result) render(detailPanel, result);
+                else node("p", detailPanel, "暂无数据");
+            };
             const details = async (action, id, text) => {
                 const result = await api(action, {id});
                 const out = node("pre", body, text + "\n" + JSON.stringify(result, null, 2));
@@ -169,8 +262,8 @@
                 const rows = await api("containers");
                 table(body, ["名称","映像","状态"], rows.map(item => [[item.Names.join(", "), item.Image, item.Status], item]), (cell, item) => {
                     const id = item.Id;
-                    btn(cell,"详情", () => details("container",id,"容器详情"));
-                    btn(cell,"资源", () => details("stats",id,"容器资源统计"));
+                    btn(cell,"详情", () => showContainerPanel("container", id, "容器详情", containerDetails));
+                    btn(cell,"资源", () => showContainerPanel("stats", id, "容器资源统计", resourceDetails));
                     [["启动","start"],["停止","stop"],["重启","restart"],["暂停","pause"],["恢复","unpause"]].forEach(([name, action]) => {
                         btn(cell,name,async () => { await api(action,{id},{}); reload(); });
                     });
